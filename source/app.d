@@ -23,7 +23,7 @@ void passThrough(HTTPServerRequest req, HTTPServerResponse res)
 			r.method = req.method;
 			r.bodyWriter.write(req.bodyReader);
 			logInfo(r.toString());
-		},		
+		},
 		(scope HTTPClientResponse r)
 		{
 			auto status = cast(HTTPStatus)r.statusCode;
@@ -47,7 +47,7 @@ void passThrough(HTTPServerRequest req, HTTPServerResponse res)
 				}
 			}
 
-			logInfo(res.toString());			
+			logInfo(res.toString());
 		}
 	);
 }
