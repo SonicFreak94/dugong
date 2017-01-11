@@ -7,3 +7,4 @@ __test__*__
 dugong
 *.dll
 *.exe
+dub.selections.json
