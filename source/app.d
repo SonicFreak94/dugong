@@ -12,42 +12,50 @@ shared static this()
 
 void passThrough(HTTPServerRequest req, HTTPServerResponse res)
 {
-	logInfo(req.toString());
-
-	// TODO: CONNECT method
-
-	requestHTTP(req.requestURL,
-		(scope HTTPClientRequest r)
+	try
+	{
+		if (req.method == HTTPMethod.CONNECT)
 		{
-			r.headers = req.headers;
-			r.method = req.method;
-			r.bodyWriter.write(req.bodyReader);
-			logInfo(r.toString());
-		},
-		(scope HTTPClientResponse r)
-		{
-			auto status = cast(HTTPStatus)r.statusCode;
+			logInfo("IDK WHAT TO DO BUT HERE TAKE THIS: " ~ req.toString());
+			return;
+		}
 
-			if (isSuccessCode(status))
+		requestHTTP(req.requestURL,
+			(scope HTTPClientRequest r)
 			{
-				res.headers = r.headers;
-				res.bodyWriter.write(r.bodyReader);
-			}
-			else
+				r.headers = req.headers;
+				r.method = req.method;
+				r.bodyWriter.write(req.bodyReader);
+			},
+			(scope HTTPClientResponse r)
 			{
-				with (HTTPStatus) switch (status)
+				auto status = cast(HTTPStatus)r.statusCode;
+
+				if (isSuccessCode(status))
 				{
-					case movedPermanently:
-					case temporaryRedirect:
-						res.redirect(r.headers["Location"]);
-						break;
+					res.headers = r.headers;
+					res.bodyWriter.write(r.bodyReader);
+				}
+				else
+				{
+					with (HTTPStatus) switch (status)
+					{
+						case movedPermanently:
+						case temporaryRedirect:
+							res.redirect(r.headers["Location"]);
+							break;
 
-					default:
-						throw new Exception("Unhandled error code " ~ httpStatusText(status));
+						default:
+							res.headers = r.headers;
+							res.bodyWriter.write(r.bodyReader);
+							break;
+					}
 				}
 			}
-
-			logInfo(res.toString());
-		}
-	);
+		);
+	}
+	catch (Exception ex)
+	{
+		res.writeBody(ex.toString());
+	}
 }
