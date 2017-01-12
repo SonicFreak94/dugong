@@ -1,4 +1,6 @@
+import std.algorithm;
 import std.conv;
+import std.range;
 import std.stdio;
 import std.string;
 import vibe.d;
@@ -58,20 +60,16 @@ void handleAny(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			stderr.writeln("/!\\ Request form: ");
 			
-			// TODO: std.range.zip
-			string[string] stupid;
-			foreach (f; req.form.toRepresentation())
-			{
-				stderr.writefln("%s: %s", f.key, f.value);
-				stupid[f.key] = f.value;
-			}
+			auto form = req.form.toRepresentation();
+			auto header = zip(form.map!(x => x.key), form.map!(x => x.value));
 
-			// TODO: actually this
-			stderr.writeln();
-			stderr.writeln("/!\\ Request files: ", req.files);
-			stderr.writeln();
+			// TODO: files
+			// auto files = req.files.toRepresentation();
+			// problem:
+			// https://github.com/rejectedsoftware/vibe.d/blob/b86e5e0eb9e5784fcc73888fc858e7609d01f028/http/vibe/http/client.d#L736
 
-			r.writeFormBody(stupid);
+			stderr.writeln(header);
+			r.writeFormBody(header);
 		}
 
 		r.bodyWriter.write(req.bodyReader);
