@@ -2,14 +2,10 @@
 	"authors": [
 		"Michael Fadely"
 	],
-	"description": "An HTTP/S cache server that uses vibe.d.",
+	"description": "HTTP(S) cache server.",
 	"name": "dugong",
-	"dependencies": {
-		"vibe-d": "~>0.7.28"
-	},
+	"dependencies": {},
 	"license": "MIT",
-	"copyright": "Copyright © 2017, Michael",
-	"versions": [
-		"VibeDefaultMain"
-	]
+	"copyright": "Copyright © 2017, Michael Fadely",
+	"versions": []
 }
