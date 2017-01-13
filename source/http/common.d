@@ -8,10 +8,7 @@ import std.array;
 import std.exception;
 import std.string;
 
-enum Method
-{
-	nope
-}
+public import http.enums;
 
 // TODO: interface (run, connected, etc)
 // TODO: outbound socket pool
@@ -151,6 +148,7 @@ char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim 
 
 	debug
 	{
+		/*
 		stderr.write("Final Result: ");
 		writedbg(str);
 		stderr.writeln();
@@ -163,6 +161,7 @@ char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim 
 		writedbg(overflow);
 		stderr.writeln();
 		stderr.writeln();
+		*/
 	}
 
 	if (str.empty)
@@ -171,8 +170,8 @@ char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim 
 	}
 
 	enforce(str.count("\r\n") == 1, `Parse failed: two line breaks present.`);
-	enforce(str.endsWith("\r\n"), `Parse failed: output does not end with line break.`);
-	enforce(result.data.empty, `Unhandled data still remains in the buffer.`);
+	enforce(str.endsWith("\r\n"),   `Parse failed: output does not end with line break.`);
+	enforce(result.data.empty,      `Unhandled data still remains in the buffer.`);
 
 	return str[0 .. $ - delim.length];
 }
@@ -186,9 +185,14 @@ private:
 public:
 	Method method;
 	string requestUrl;
-	string httpVersion;
+	Version httpVersion;
 	string[string] headers;
 	
+	@property auto connected() const
+	{
+		return socket.isAlive;
+	}
+
 	this(Socket socket)
 	{
 		enforce(socket.isAlive);
@@ -197,11 +201,6 @@ public:
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 15.seconds);
 	}
 	
-	@property auto connected() const
-	{
-		return socket.isAlive;
-	}
-
 	void disconnect()
 	{
 		overflow.clear();
@@ -210,21 +209,57 @@ public:
 	
 	bool run()
 	{
-		char[] str;
-
 		try
 		{
-			do
+			auto line = socket.readln(overflow);
+
+			if (line.empty)
 			{
-				str = socket.readln(overflow);
-			} while (!str.empty);
+				disconnect();
+				return false;
+			}
+
+			auto elements = line.split();
+			enforce(elements.length > 1, "Too few parameters for request!");
+
+			method = elements[0].toMethod();
+			enforce(method != method.none, "Invalid method: " ~ elements[0]);
+
+			auto _httpVersion = elements[$ - 1];
+			httpVersion = _httpVersion.toVersion();
+
+			enforce(httpVersion != Version.none, "Invalid HTTP version: " ~ _httpVersion);
+
+			if (elements.length > 2)
+			{
+				requestUrl = elements[1].idup;
+			}
+
+			for (char[] header; !(header = socket.readln(overflow)).empty;)
+			{
+				auto key = header.munch("^:");
+				header.munch(": ");
+				auto value = header;
+
+				headers[key.idup] = value.idup;
+			}
+
+			if (httpVersion == Version.v1_1)
+			{
+				// TODO: send 400 (Bad Request), not enforce
+				enforce(("Host" in headers) !is null, "Missing required host header for HTTP/1.1");
+			}
+
+			debug stderr.writeln("Headers: ", headers);
+
+			// TODO: body
 		}
 		catch (Exception ex)
 		{
-			stderr.writeln(ex.msg);
+			debug stderr.writeln(ex.msg);
+			disconnect();
+			return false;
 		}
-
-		// TODO: parse the things and populate fields
 
 		return false;
 	}
