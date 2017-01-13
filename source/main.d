@@ -10,7 +10,7 @@ ushort proxyPort = 3128;
 int main(string[] argv)
 {
 	auto listener = new TcpSocket();
-	listener.blocking = false;
+	//listener.blocking = false;
 	listener.bind(new InternetAddress(proxyPort));
 	listener.listen(1);
 
@@ -25,10 +25,15 @@ int main(string[] argv)
 
 			if (socketSet.isSet(listener))
 			{
+				stdout.writeln(__FUNCTION__, ": accepting");
 				auto socket = listener.accept();
 				auto req = new ServerRequest(socket);
+
+				stdout.writeln(__FUNCTION__, ": running");
 				req.run();
-				listener.disconnect();
+
+				stdout.writeln(__FUNCTION__, ": disconnecting");
+				req.disconnect();
 			}
 		}
 		catch (Exception ex)

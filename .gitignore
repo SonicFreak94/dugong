@@ -8,3 +8,4 @@ dugong
 *.dll
 *.exe
 dub.selections.json
+*.sln
