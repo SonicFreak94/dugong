@@ -12,9 +12,7 @@ public import http.enums;
 // TODO: interface (run, connected, etc)
 // TODO: outbound socket pool
 
-@safe:
-
-char[] getln(ref Appender!(char[]) str, const char[] delim)
+@safe char[] getln(ref Appender!(char[]) str, const char[] delim)
 {
 	if (str.data.empty)
 	{
@@ -30,13 +28,13 @@ char[] getln(ref Appender!(char[]) str, const char[] delim)
 	return str.data[0 .. index + delim.length];
 }
 
-void disconnect(Socket socket)
+@safe void disconnect(Socket socket)
 {
 	socket.shutdown(SocketShutdown.BOTH);
 	socket.close();
 }
 
-char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const char[] delim)
+@safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const char[] delim)
 {
 	enforce(input !is output, "input and output must be different!");
 	auto result = input.getln(delim);
@@ -65,7 +63,7 @@ char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const
 	return result;
 }
 
-char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim = "\r\n")
+@safe char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim = "\r\n")
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
@@ -135,15 +133,47 @@ char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim 
 	return str[0 .. $ - delim.length];
 }
 
-void writeln(A...)(Socket socket, A args...)
+@safe void writeln(T, A...)(ref Appender!T output, A args)
 {
-	Appender!(string) builder;
-
 	foreach (a; args)
 	{
-		builder.put(a);
+		output.put(a);
 	}
 
-	builder.put("\r\n");
+	output.put("\r\n");
+}
+
+@safe void writeln(A...)(Socket socket, A args)
+{
+	Appender!string builder;
+	builder.writeln(args);
 	socket.send(builder.data);
+}
+
+abstract class HttpInstance
+{
+protected:
+	Socket socket;
+
+public:
+	this(Socket socket, lazy Duration timeout = 15.seconds)
+	{
+		enforce(socket.isAlive);
+		this.socket = socket;
+		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
+		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+	}
+
+	@property bool connected()
+	{
+		return socket.isAlive();
+	}
+
+	void disconnect()
+	{
+		socket.disconnect();
+	}
+
+	void run();
+	void send();
 }

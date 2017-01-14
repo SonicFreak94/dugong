@@ -1,5 +1,6 @@
 import std.stdio;
 import std.socket;
+import std.parallelism;
 
 import http;
 
@@ -10,6 +11,8 @@ int main(string[] argv)
 	auto listener = new TcpSocket();
 	listener.bind(new InternetAddress(proxyPort));
 	listener.listen(1);
+
+	HttpInstance[] instances;
 
 	auto socketSet = new SocketSet();
 
@@ -23,15 +26,24 @@ int main(string[] argv)
 			if (socketSet.isSet(listener))
 			{
 				stdout.writeln(__FUNCTION__, ": accepting");
-				auto socket = listener.accept();
-				auto req = new HttpRequest(socket);
-
-				stdout.writeln(__FUNCTION__, ": running");
-				req.run();
-
-				stdout.writeln(__FUNCTION__, ": disconnecting");
-				req.disconnect();
+				instances ~= new HttpRequest(listener.accept());
+				stdout.writeln(__FUNCTION__, ": instances: ", instances.length);
 			}
+
+			stdout.writeln(__FUNCTION__, ": running");
+
+			foreach (instance; taskPool.parallel(instances, 1))
+			//foreach (instance; instances)
+			{
+				instance.run();
+			}
+
+			stdout.writeln(__FUNCTION__, ": done");
+
+			import std.algorithm;
+			import std.array;
+			instances = instances.filter!(x => x.connected()).array;
+			stdout.writeln(__FUNCTION__, ": instances: ", instances.length);
 		}
 		catch (Exception ex)
 		{

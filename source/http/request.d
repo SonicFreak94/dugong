@@ -2,16 +2,16 @@ module http.request;
 
 import core.time;
 import std.array;
+import std.conv;
 import std.exception;
 import std.string;
+import std.stdio;
 
-import http.common;
-import http.enums;
+import http;
 
-class HttpRequest
+class HttpRequest : HttpInstance
 {
 private:
-	Socket socket;
 	Appender!(char[]) overflow;
 
 public:
@@ -21,25 +21,79 @@ public:
 	string[string] headers;
 	ubyte[] body_;
 
-	@property auto connected() const
-	{
-		return socket.isAlive;
-	}
-
 	this(Socket socket)
 	{
-		enforce(socket.isAlive);
-		this.socket = socket;
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 15.seconds);
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 15.seconds);
+		super(socket);
 	}
 
-	void disconnect()
+	override void disconnect()
 	{
 		overflow.clear();
-		socket.disconnect();
+		super.disconnect();
 	}
 
+	override void run()
+	{
+		try
+		{
+			parse();
+		}
+		catch (Exception ex)
+		{
+			synchronized stderr.writeln(ex.msg);
+			disconnect();
+			return;
+		}
+
+		bool persist;
+
+		switch (version_) with (HttpVersion)
+		{
+			default:
+				// TODO: 400 (Bad Request)
+				break;
+
+			case v1_0:
+				persist = false;
+				// TODO: check if persistent connection is enabled (non-standard for 1.0)
+				break;
+
+			case v1_1:
+				persist = true;
+				// TODO: check if persistent connection is *disabled* (default enabled)
+				if ("Host" !in headers)
+				{
+					// TODO: 400 (Bad Request)
+					disconnect();
+					return;
+				}
+				break;
+		}
+
+		switch (method) with (HttpMethod)
+		{
+			case none:
+				// TODO: 400 (Bad Request)?
+				disconnect();
+				break;
+
+			case connect:
+				handleConnect();
+				break;
+
+			default:
+				// TODO: passthrough (and caching obviously)
+				// TODO: check for multipart
+				break;
+		}
+	}
+
+	override void send()
+	{
+		throw new Exception("Not implemented");
+	}
+
+private:
 	void parse()
 	{
 		auto line = socket.readln(overflow);
@@ -77,66 +131,78 @@ public:
 		// TODO: body?
 	}
 
-	void run()
+	void handleConnect()
 	{
+		Socket remote;
+
 		try
 		{
-			parse();
+			auto address = requestUrl.split(':');
+			remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
+			enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
+
+			auto response = new HttpResponse(socket);
+			response.send();
 		}
 		catch (Exception ex)
 		{
+			synchronized stderr.writeln(ex.msg);
 			disconnect();
 			return;
 		}
 
-		auto _ptr = "Host" in headers;
-		string host = ptr is null ? null : *_ptr;
-		bool persist;
-
-		switch (version_) with (HttpVersion)
+		scope (exit)
 		{
-			default:
-				// TODO: 400 (Bad Request)
-				break;
-
-			case v1_0:
-				persist = false;
-				// TODO: check if persistent connection is enabled (non-standard for 1.0)
-				break;
-
-			case v1_1:
-				persist = true;
-				// TODO: check if persistent connection is *disabled* (default enabled)
-				if (host.empty)
-				{
-					// TODO: 400 (Bad Request)
-					disconnect();
-				}
-				break;
+			disconnect();
+			remote.disconnect();
 		}
 
-		switch (method) with (HttpMethod)
+		// HACK: all of this is so broken
+		socket.blocking = true;
+		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
+		//socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 1.seconds);
+
+		remote.blocking = true;
+		remote.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
+		//remote.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 1.seconds);
+
+		bool forward(Socket from, Socket to)
 		{
-			case none:
-				// TODO: 400 (Bad Request)?
-				disconnect();
-				break;
+			ubyte[1024] buffer;
+			auto length = from.receive(buffer);
 
-			case connect:
-				// TODO: connect proxy
-				// TODO: socket pool
-				break;
+			if (length == Socket.ERROR)
+			{
+				return false;
+			}
 
-			default:
-				// TODO: passthrough (and caching obviously)
-				// TODO: check for multipart
-				break;
+			if (!length)
+			{
+				return false;
+			}
+
+			to.send(buffer[0 .. length]);
+			return true;
 		}
-	}
 
-	override string toString()
-	{
-		// TODO
-		throw new Exception("Not implemented");
+		while (socket.isAlive && remote.isAlive)
+		{
+			int count;
+
+			if (forward(remote, socket))
+			{
+				++count;
+			}
+
+			if (forward(socket, remote))
+			{
+				++count;
+			}
+
+			if (!count)
+			{
+				break;
+			}
+		}
 	}
 }
