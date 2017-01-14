@@ -1,7 +1,6 @@
 module http.common;
 
 public import std.socket;
-debug import std.stdio;
 
 import core.time;
 import std.array;
@@ -12,6 +11,8 @@ public import http.enums;
 
 // TODO: interface (run, connected, etc)
 // TODO: outbound socket pool
+
+@safe:
 
 char[] getln(ref Appender!(char[]) str, const char[] delim)
 {
@@ -35,33 +36,9 @@ void disconnect(Socket socket)
 	socket.close();
 }
 
-debug void writedbg(in char[] str)
-{
-	foreach (c; str)
-	{
-		switch (c)
-		{
-			case '\r':
-				stderr.write("\\CR");
-				break;
-			case '\n':
-				stderr.write("\\LF");
-				break;
-			default:
-				stderr.write(c);
-				break;
-		}
-	}
-}
-
-debug void writedbg(in Appender!(char[]) str)
-{
-	writedbg(str.data);
-}
-
 char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const char[] delim)
 {
-	enforce(!(input is output), "input and output must be different!");
+	enforce(input !is output, "input and output must be different!");
 	auto result = input.getln(delim);
 
 	if (result.empty)
@@ -146,126 +123,27 @@ char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim 
 		}
 	}
 
-	debug
-	{
-		/*
-		stderr.write("Final Result: ");
-		writedbg(str);
-		stderr.writeln();
-
-		stderr.write("   Remainder: ");
-		writedbg(result);
-		stderr.writeln();
-
-		stderr.write("    Overflow: ");
-		writedbg(overflow);
-		stderr.writeln();
-		stderr.writeln();
-		*/
-	}
-
 	if (str.empty)
 	{
 		return null;
 	}
 
-	enforce(str.count("\r\n") == 1, `Parse failed: two line breaks present.`);
+	enforce(str.count("\r\n") == 1, `Parse failed: more than one line break in output.`);
 	enforce(str.endsWith("\r\n"),   `Parse failed: output does not end with line break.`);
 	enforce(result.data.empty,      `Unhandled data still remains in the buffer.`);
 
 	return str[0 .. $ - delim.length];
 }
 
-class Request
+void writeln(A...)(Socket socket, A args...)
 {
-private:
-	Socket socket;
-	Appender!(char[]) overflow;
+	Appender!(string) builder;
 
-public:
-	Method method;
-	string requestUrl;
-	Version httpVersion;
-	string[string] headers;
-	
-	@property auto connected() const
+	foreach (a; args)
 	{
-		return socket.isAlive;
+		builder.put(a);
 	}
 
-	this(Socket socket)
-	{
-		enforce(socket.isAlive);
-		this.socket = socket;
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 15.seconds);
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 15.seconds);
-	}
-	
-	void disconnect()
-	{
-		overflow.clear();
-		socket.disconnect();
-	}
-	
-	bool run()
-	{
-		try
-		{
-			auto line = socket.readln(overflow);
-
-			if (line.empty)
-			{
-				disconnect();
-				return false;
-			}
-
-			auto elements = line.split();
-			enforce(elements.length > 1, "Too few parameters for request!");
-
-			method = elements[0].toMethod();
-			enforce(method != method.none, "Invalid method: " ~ elements[0]);
-
-			auto _httpVersion = elements[$ - 1];
-			httpVersion = _httpVersion.toVersion();
-
-			enforce(httpVersion != Version.none, "Invalid HTTP version: " ~ _httpVersion);
-
-			if (elements.length > 2)
-			{
-				requestUrl = elements[1].idup;
-			}
-
-			for (char[] header; !(header = socket.readln(overflow)).empty;)
-			{
-				auto key = header.munch("^:");
-				header.munch(": ");
-				auto value = header;
-
-				headers[key.idup] = value.idup;
-			}
-
-			if (httpVersion == Version.v1_1)
-			{
-				// TODO: send 400 (Bad Request), not enforce
-				enforce(("Host" in headers) !is null, "Missing required host header for HTTP/1.1");
-			}
-
-			debug stderr.writeln("Headers: ", headers);
-
-			// TODO: body
-		}
-		catch (Exception ex)
-		{
-			debug stderr.writeln(ex.msg);
-			disconnect();
-			return false;
-		}
-
-		return false;
-	}
-}
-
-class Response
-{
-
+	builder.put("\r\n");
+	socket.send(builder.data);
 }

@@ -1,9 +1,8 @@
 import std.stdio;
 import std.socket;
-import std.conv;
-import std.string;
 
-import http.server;
+import http.common;
+import http.request;
 
 ushort proxyPort = 3128;
 
@@ -26,7 +25,7 @@ int main(string[] argv)
 			{
 				stdout.writeln(__FUNCTION__, ": accepting");
 				auto socket = listener.accept();
-				auto req = new ServerRequest(socket);
+				auto req = new HttpRequest(socket);
 
 				stdout.writeln(__FUNCTION__, ": running");
 				req.run();
@@ -38,8 +37,6 @@ int main(string[] argv)
 		catch (Exception ex)
 		{
 			stderr.writeln(ex.msg);
-			stderr.writeln("(press any key)");
-			stdin.readln();
 		}
 	}
 
