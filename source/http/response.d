@@ -40,4 +40,10 @@ public:
 	{
 		return false;
 	}
+
+	override string toString()
+	{
+		// TODO
+		throw new Exception("Not implemented");
+	}
 }
