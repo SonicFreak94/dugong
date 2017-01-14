@@ -15,7 +15,7 @@ private:
 
 public:
 	string[string] headers;
-	HttpVersion httpVersion;
+	HttpVersion version_;
 	int statusCode;
 
 	@property auto connected() const
@@ -36,9 +36,8 @@ public:
 		socket.disconnect();
 	}
 
-	bool run()
+	void run()
 	{
-		return false;
 	}
 
 	override string toString()

@@ -16,7 +16,7 @@ enum HttpMethod
 
 string toString(HttpMethod method)
 {
-	with (HttpMethod) switch (method)
+	switch (method) with (HttpMethod)
 	{
 		case get:     return "GET";
 		case head:    return "HEAD";
@@ -33,18 +33,18 @@ string toString(HttpMethod method)
 
 HttpMethod toMethod(const char[] str)
 {
-	switch (str)
+	switch (str) with (HttpMethod)
 	{
-		case "GET":     return HttpMethod.get;
-		case "HEAD":    return HttpMethod.head;
-		case "POST":    return HttpMethod.post;
-		case "PUT":     return HttpMethod.put;
-		case "DELETE":  return HttpMethod.delete_;
-		case "TRACE":   return HttpMethod.trace;
-		case "OPTIONS": return HttpMethod.options;
-		case "CONNECT": return HttpMethod.connect;
-		case "PATCH":   return HttpMethod.patch;
-		default:        return HttpMethod.none;
+		case "GET":     return get;
+		case "HEAD":    return head;
+		case "POST":    return post;
+		case "PUT":     return put;
+		case "DELETE":  return delete_;
+		case "TRACE":   return trace;
+		case "OPTIONS": return options;
+		case "CONNECT": return connect;
+		case "PATCH":   return patch;
+		default:        return none;
 	}
 }
 
@@ -57,7 +57,7 @@ enum HttpVersion
 
 string toString(HttpVersion version_)
 {
-	with (HttpVersion) switch (version_)
+	switch (version_) with (HttpVersion)
 	{
 		case v1_0: return "HTTP/1.0";
 		case v1_1: return "HTTP/1.1";
@@ -67,11 +67,11 @@ string toString(HttpVersion version_)
 
 HttpVersion toVersion(const char[] str)
 {
-	switch (str)
+	switch (str) with (HttpVersion)
 	{
-		case "HTTP/1.0": return HttpVersion.v1_0;
-		case "HTTP/1.1": return HttpVersion.v1_1;
-		default:         return HttpVersion.none;
+		case "HTTP/1.0": return v1_0;
+		case "HTTP/1.1": return v1_1;
+		default:         return none;
 	}
 }
 
@@ -143,7 +143,7 @@ enum HttpStatus : int
 
 string toString(HttpStatus status)
 {
-	with (HttpStatus) switch (status)
+	switch (status) with (HttpStatus)
 	{
 		case continue_:                     return "Continue";
 		case switchingProtocols:            return "Switching Protocols";
@@ -212,69 +212,69 @@ string toString(HttpStatus status)
 
 HttpStatus toStatus(const char[] str)
 {
-	switch (str)
+	switch (str) with (HttpStatus)
 	{
-		case "Continue":                        return HttpStatus.continue_;
-		case "Switching Protocols":             return HttpStatus.switchingProtocols;
-		case "Processing":                      return HttpStatus.processing;
-		case "OK":                              return HttpStatus.ok;
-		case "Created":                         return HttpStatus.created;
-		case "Accepted":                        return HttpStatus.accepted;
-		case "Non-Authoritative Information":   return HttpStatus.nonAuthoritativeInformation;
-		case "No Content":                      return HttpStatus.noContent;
-		case "Reset Content":                   return HttpStatus.resetContent;
-		case "Partial Content":                 return HttpStatus.partialContent;
-		case "Multi-Status":                    return HttpStatus.multiStatus;
-		case "Already Reported":                return HttpStatus.alreadyReported;
-		case "IM Used":                         return HttpStatus.imUsed;
-		case "Multiple Choices":                return HttpStatus.multipleChoices;
-		case "Moved Permanently":               return HttpStatus.movedPermanently;
-		case "Found":                           return HttpStatus.found;
-		case "See Other":                       return HttpStatus.seeOther;
-		case "Not Modified":                    return HttpStatus.notModified;
-		case "Use Proxy":                       return HttpStatus.useProxy;
-		case "Switch Proxy":                    return HttpStatus.switchProxy;
-		case "Temporary Redirect":              return HttpStatus.temporaryRedirect;
-		case "Permanent Redirect":              return HttpStatus.permanentRedirect;
-		case "Bad Request":                     return HttpStatus.badRequest;
-		case "Unauthorized":                    return HttpStatus.unauthorized;
-		case "Payment Required":                return HttpStatus.paymentRequired;
-		case "Forbidden":                       return HttpStatus.forbidden;
-		case "Not Found":                       return HttpStatus.notFound;
-		case "Method Not Allowed":              return HttpStatus.methodNotAllowed;
-		case "Not Acceptable":                  return HttpStatus.notAcceptable;
-		case "Proxy Authentication Required":   return HttpStatus.proxyAuthenticationRequired;
-		case "Request Time-out":                return HttpStatus.requestTimeout;
-		case "Conflict":                        return HttpStatus.conflict;
-		case "Gone":                            return HttpStatus.gone;
-		case "Length Required":                 return HttpStatus.lengthRequired;
-		case "Precondition Failed":             return HttpStatus.preconditionFailed;
-		case "Payload Too Large":               return HttpStatus.payloadTooLarge;
-		case "URI Too Long":                    return HttpStatus.uriTooLong;
-		case "Unsupported Media Type":          return HttpStatus.unsupportedMediaType;
-		case "Range Not Satisfiable":           return HttpStatus.rangeNotSatisfiable;
-		case "Expectation Failed":              return HttpStatus.expectationFailed;
-		case "I'm a teapot":                    return HttpStatus.teapot;
-		case "Misdirected Request":             return HttpStatus.misdirectedRequest;
-		case "Unprocessable Entity":            return HttpStatus.unprocessableEntity;
-		case "Locked":                          return HttpStatus.locked;
-		case "Failed Dependency":               return HttpStatus.failedDependency;
-		case "Upgrade Required":                return HttpStatus.upgradeRequired;
-		case "Precondition Required":           return HttpStatus.preconditionRequired;
-		case "Too Many Requests":               return HttpStatus.tooManyRequests;
-		case "Request Header Fields Too Large": return HttpStatus.requestHeaderFieldsTooLarge;
-		case "Unavailable For Legal Reasons":   return HttpStatus.unavailableForLegalReasons;
-		case "Internal Server Error":           return HttpStatus.internalServerError;
-		case "Not Implemented":                 return HttpStatus.notImplemented;
-		case "Bad Gateway":                     return HttpStatus.badGateway;
-		case "Service Unavailable":             return HttpStatus.serviceUnavailable;
-		case "Gateway Time-out":                return HttpStatus.gatewayTimeout;
-		case "HTTP Version Not Supported":      return HttpStatus.httpVersionNotSupported;
-		case "Variant Also Negotiates":         return HttpStatus.variantAlsoNegotiates;
-		case "Insufficient Storage":            return HttpStatus.insufficientStorage;
-		case "Loop Detected":                   return HttpStatus.loopDetected;
-		case "Not Extended":                    return HttpStatus.notExtended;
-		case "Network Authentication Required": return HttpStatus.networkAuthenticationRequired;
-		default:                                return HttpStatus.none;
+		case "Continue":                        return continue_;
+		case "Switching Protocols":             return switchingProtocols;
+		case "Processing":                      return processing;
+		case "OK":                              return ok;
+		case "Created":                         return created;
+		case "Accepted":                        return accepted;
+		case "Non-Authoritative Information":   return nonAuthoritativeInformation;
+		case "No Content":                      return noContent;
+		case "Reset Content":                   return resetContent;
+		case "Partial Content":                 return partialContent;
+		case "Multi-Status":                    return multiStatus;
+		case "Already Reported":                return alreadyReported;
+		case "IM Used":                         return imUsed;
+		case "Multiple Choices":                return multipleChoices;
+		case "Moved Permanently":               return movedPermanently;
+		case "Found":                           return found;
+		case "See Other":                       return seeOther;
+		case "Not Modified":                    return notModified;
+		case "Use Proxy":                       return useProxy;
+		case "Switch Proxy":                    return switchProxy;
+		case "Temporary Redirect":              return temporaryRedirect;
+		case "Permanent Redirect":              return permanentRedirect;
+		case "Bad Request":                     return badRequest;
+		case "Unauthorized":                    return unauthorized;
+		case "Payment Required":                return paymentRequired;
+		case "Forbidden":                       return forbidden;
+		case "Not Found":                       return notFound;
+		case "Method Not Allowed":              return methodNotAllowed;
+		case "Not Acceptable":                  return notAcceptable;
+		case "Proxy Authentication Required":   return proxyAuthenticationRequired;
+		case "Request Time-out":                return requestTimeout;
+		case "Conflict":                        return conflict;
+		case "Gone":                            return gone;
+		case "Length Required":                 return lengthRequired;
+		case "Precondition Failed":             return preconditionFailed;
+		case "Payload Too Large":               return payloadTooLarge;
+		case "URI Too Long":                    return uriTooLong;
+		case "Unsupported Media Type":          return unsupportedMediaType;
+		case "Range Not Satisfiable":           return rangeNotSatisfiable;
+		case "Expectation Failed":              return expectationFailed;
+		case "I'm a teapot":                    return teapot;
+		case "Misdirected Request":             return misdirectedRequest;
+		case "Unprocessable Entity":            return unprocessableEntity;
+		case "Locked":                          return locked;
+		case "Failed Dependency":               return failedDependency;
+		case "Upgrade Required":                return upgradeRequired;
+		case "Precondition Required":           return preconditionRequired;
+		case "Too Many Requests":               return tooManyRequests;
+		case "Request Header Fields Too Large": return requestHeaderFieldsTooLarge;
+		case "Unavailable For Legal Reasons":   return unavailableForLegalReasons;
+		case "Internal Server Error":           return internalServerError;
+		case "Not Implemented":                 return notImplemented;
+		case "Bad Gateway":                     return badGateway;
+		case "Service Unavailable":             return serviceUnavailable;
+		case "Gateway Time-out":                return gatewayTimeout;
+		case "HTTP Version Not Supported":      return httpVersionNotSupported;
+		case "Variant Also Negotiates":         return variantAlsoNegotiates;
+		case "Insufficient Storage":            return insufficientStorage;
+		case "Loop Detected":                   return loopDetected;
+		case "Not Extended":                    return notExtended;
+		case "Network Authentication Required": return networkAuthenticationRequired;
+		default:                                return none;
 	}
 }

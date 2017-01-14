@@ -1,8 +1,7 @@
 import std.stdio;
 import std.socket;
 
-import http.common;
-import http.request;
+import http;
 
 ushort proxyPort = 3128;
 

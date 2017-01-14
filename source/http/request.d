@@ -17,8 +17,9 @@ private:
 public:
 	HttpMethod method;
 	string requestUrl;
-	HttpVersion httpVersion;
+	HttpVersion version_;
 	string[string] headers;
+	ubyte[] body_;
 
 	@property auto connected() const
 	{
@@ -56,9 +57,9 @@ public:
 		enforce(method != method.none, "Invalid method: " ~ elements[0]);
 
 		auto _httpVersion = elements[$ - 1];
-		httpVersion = _httpVersion.toVersion();
+		version_ = _httpVersion.toVersion();
 
-		enforce(httpVersion != HttpVersion.none, "Invalid HTTP version: " ~ _httpVersion);
+		enforce(version_ != HttpVersion.none, "Invalid HTTP version: " ~ _httpVersion);
 
 		if (elements.length > 2)
 		{
@@ -73,10 +74,10 @@ public:
 			headers[key.idup] = value.idup;
 		}
 
-		// TODO: body
+		// TODO: body?
 	}
 
-	bool run()
+	void run()
 	{
 		try
 		{
@@ -85,17 +86,52 @@ public:
 		catch (Exception ex)
 		{
 			disconnect();
-			return false;
+			return;
 		}
 
-		if (httpVersion == HttpVersion.v1_1)
+		auto _ptr = "Host" in headers;
+		string host = ptr is null ? null : *_ptr;
+		bool persist;
+
+		switch (version_) with (HttpVersion)
 		{
-			// TODO: send 400 (Bad Request), not enforce
-			enforce(("Host" in headers) !is null, "Missing required host header for HTTP/1.1");
+			default:
+				// TODO: 400 (Bad Request)
+				break;
+
+			case v1_0:
+				persist = false;
+				// TODO: check if persistent connection is enabled (non-standard for 1.0)
+				break;
+
+			case v1_1:
+				persist = true;
+				// TODO: check if persistent connection is *disabled* (default enabled)
+				if (host.empty)
+				{
+					// TODO: 400 (Bad Request)
+					disconnect();
+				}
+				break;
 		}
 
-		// TODO
-		return false;
+		switch (method) with (HttpMethod)
+		{
+			case none:
+				// TODO: 400 (Bad Request)?
+				disconnect();
+				break;
+
+			case connect:
+				// TODO: connect proxy
+				// TODO: socket pool
+				break;
+
+			default:
+				// TODO: passthrough (and caching obviously)
+				// TODO: check for multipart
+				break;
+		}
 	}
 
 	override string toString()
