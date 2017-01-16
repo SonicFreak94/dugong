@@ -82,7 +82,6 @@ public:
 
 		if (line.empty)
 		{
-			disconnect();
 			return;
 		}
 

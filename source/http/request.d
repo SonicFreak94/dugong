@@ -15,6 +15,10 @@ import http;
 
 class HttpRequest : HttpInstance
 {
+private:
+	Socket remote;
+	bool persistent;
+
 public:
 	HttpMethod method;
 	string requestUrl;
@@ -31,6 +35,13 @@ public:
 		requestUrl = null;
 	}
 
+	override void disconnect()
+	{
+		super.disconnect();
+		remote.disconnect();
+		remote = null;
+	}
+
 	void run()
 	{
 		scope (exit)
@@ -38,12 +49,28 @@ public:
 			disconnect();
 		}
 
-		bool persist;
-
-		// TODO: handle persistent connections better
 		while (connected())
 		{
-			receive();
+			if (remote !is null && remote.isAlive)
+			{
+				switch (method) with (HttpMethod)
+				{
+					case connect:
+						connectProxy();
+						continue;
+
+					case get:
+						receive();
+						break;
+
+					default:
+						throw new Exception("Unsupported method for persistent connections: " ~ method.toString());
+				}
+			}
+			else
+			{
+				receive();
+			}
 
 			if (!connected())
 			{
@@ -67,11 +94,11 @@ public:
 					break;
 
 				case v1_0:
-					persist = false;
+					persistent = false;
 
 					if (!connection.empty)
 					{
-						persist = !sicmp(connection, "keep-alive");
+						persistent = !sicmp(connection, "keep-alive");
 					}
 					break;
 
@@ -82,11 +109,11 @@ public:
 						return;
 					}
 
-					persist = true;
+					persistent = true;
 
 					if (!connection.empty)
 					{
-						persist = !!sicmp(connection, "close");
+						persistent = !!sicmp(connection, "close");
 					}
 					break;
 			}
@@ -98,7 +125,7 @@ public:
 					return;
 
 				case connect:
-					handleConnect(persist);
+					handleConnect();
 					break;
 
 				case get:
@@ -121,9 +148,12 @@ public:
 						port = 80;
 					}
 
-					auto remote = new TcpSocket(new InternetAddress(address, port));
-					send(remote);
+					if (remote is null || !remote.isAlive)
+					{
+						remote = new TcpSocket(new InternetAddress(address, port));
+					}
 
+					send(remote);
 					auto r = new HttpResponse(remote);
 					r.run();
 					r.send(socket);
@@ -133,12 +163,10 @@ public:
 					break;
 			}
 
-			if (!persist)
+			if (!persistent)
 			{
 				break;
 			}
-
-			clear();
 		}
 	}
 
@@ -174,7 +202,6 @@ public:
 
 		if (line.empty)
 		{
-			//disconnect();
 			return;
 		}
 
@@ -213,53 +240,40 @@ public:
 	}
 
 private:
-	void handleConnect(bool persist)
+	void handleConnect()
 	{
-		scope (exit)
-		{
-			if (!persist)
-			{
-				disconnect();
-			}
-		}
-
 		auto address = requestUrl.split(':');
-		auto remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
+
+		remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
 		enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
 
 		auto response = new HttpResponse(socket);
 		response.send();
 
-		scope (exit)
+		connectProxy();
+	}
+
+	bool forward(Socket from, Socket to)
+	{
+		ubyte[1024] buffer;
+		auto length = from.receive(buffer);
+
+		if (length == Socket.ERROR)
 		{
-			if (!persist)
-			{
-				remote.disconnect();
-			}
+			return false;
 		}
 
-		socket.blocking = false;
-		remote.blocking = false;
-
-		bool forward(Socket from, Socket to)
+		if (!length)
 		{
-			ubyte[1024] buffer;
-			auto length = from.receive(buffer);
-
-			if (length == Socket.ERROR)
-			{
-				return false;
-			}
-
-			if (!length)
-			{
-				return false;
-			}
-
-			to.send(buffer[0 .. length]);
-			return true;
+			return false;
 		}
 
+		to.send(buffer[0 .. length]);
+		return true;
+	}
+
+	void connectProxy()
+	{
 		auto errors = new SocketSet();
 		auto reads  = new SocketSet();
 
@@ -270,8 +284,9 @@ private:
 			reads.add(remote);
 			reads.add(socket);
 
-			if (!Socket.select(reads, null, errors, 1.seconds))
+			if (Socket.select(reads, null, errors) <= 0)
 			{
+				persistent = false;
 				break;
 			}
 
@@ -294,15 +309,23 @@ private:
 
 			if (reads.isSet(socket) && forward(socket, remote))
 			{
-				 ++count;
+				++count;
 			}
+
+			Thread.yield();
 
 			if (!count)
 			{
 				break;
 			}
 
-			Thread.yield();
+			scope (exit)
+			{
+				if (!persistent)
+				{
+					disconnect();
+				}
+			}
 		}
 	}
 }

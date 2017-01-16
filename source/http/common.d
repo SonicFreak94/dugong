@@ -179,6 +179,7 @@ public import http.enums;
 @trusted ubyte[] readChunk(Socket socket, ref Appender!(char[]) overflow)
 {
 	// TODO: fix invalid utf sequence (string auto decoding sucks!)
+	// TODO: send chunks as they're received
 	Appender!(char[]) result;
 
 	for (char[] line; !(line = socket.readln(overflow)).empty;)
@@ -266,10 +267,10 @@ public:
 		return socket.isAlive();
 	}
 
-	final void disconnect()
+	void disconnect()
 	{
 		socket.disconnect();
-		overflow.clear();
+		clear();
 	}
 
 	final string getHeader(in string key)
