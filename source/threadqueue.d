@@ -6,7 +6,7 @@ import std.container;
 import std.parallelism;
 import std.stdio;
 
-// TODO: maybe array of fiber sheduler for maximum saturation?
+// TODO: concurrency per thread
 
 class ThreadQueue
 {
@@ -14,6 +14,7 @@ private:
 	size_t threadCount;
 	DList!Thread queue;
 	Thread[] running;
+	size_t instances;
 
 public:
 	this(size_t threadCount = totalCPUs)
@@ -29,7 +30,7 @@ public:
 
 	void run()
 	{
-		foreach (ref Thread t; running)
+		foreach (i, ref Thread t; running)
 		{
 			if (t !is null)
 			{
@@ -45,10 +46,11 @@ public:
 				}
 				catch (Exception ex)
 				{
-					stderr.writeln(ex.msg);
+					stderr.writefln("[%d] %s", i, ex.msg);
 				}
 
 				t = null;
+				stderr.writeln("threads: ", --instances);
 			}
 
 			if (queue.empty)
@@ -59,6 +61,8 @@ public:
 			t = queue.front();
 			queue.removeFront();
 			t.start();
+
+			stderr.writeln("threads: ", ++instances);
 		}
 	}
 }

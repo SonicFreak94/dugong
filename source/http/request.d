@@ -170,8 +170,6 @@ private:
 		socket.blocking = false;
 		remote.blocking = false;
 
-		auto start = MonoTime.currTime;
-
 		bool forward(Socket from, Socket to)
 		{
 			ubyte[1024] buffer;
@@ -179,32 +177,48 @@ private:
 
 			if (length == Socket.ERROR)
 			{
-				return MonoTime.currTime - start < 5.seconds;
+				return false;
 			}
 
 			if (!length)
 			{
-				return wouldHaveBlocked();
+				return false;
 			}
 
 			to.send(buffer[0 .. length]);
 			return true;
 		}
 
+		auto errors = new SocketSet();
+		auto reads  = new SocketSet();
+
 		while (socket.isAlive && remote.isAlive)
 		{
+			errors.add(remote);
+			errors.add(socket);
+			reads.add(remote);
+			reads.add(socket);
+
+			if (!Socket.select(reads, null, errors, 1.seconds))
+			{
+				break;
+			}
+
+			if (errors.isSet(socket) || errors.isSet(remote))
+			{
+				break;
+			}
+
 			int count;
 
-			if (forward(remote, socket))
+			if (reads.isSet(remote) && forward(remote, socket))
 			{
-				start = MonoTime.currTime;
 				++count;
 			}
 
-			if (forward(socket, remote))
+			if (reads.isSet(socket) && forward(socket, remote))
 			{
-				start = MonoTime.currTime;
-				++count;
+				 ++count;
 			}
 
 			if (!count)
