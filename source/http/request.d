@@ -1,6 +1,8 @@
 module http.request;
 
+import core.thread;
 import core.time;
+
 import std.array;
 import std.conv;
 import std.exception;
@@ -34,6 +36,12 @@ public:
 
 	override void run()
 	{
+		if (!connected())
+		{
+			disconnect();
+			return;
+		}
+
 		try
 		{
 			parse();
@@ -107,6 +115,7 @@ private:
 		auto elements = line.split();
 		enforce(elements.length > 1, "Too few parameters for request!");
 
+		stderr.writeln("wonjis: ", elements[0]);
 		method = elements[0].toMethod();
 		enforce(method != method.none, "Invalid method: " ~ elements[0]);
 
@@ -158,13 +167,10 @@ private:
 		}
 
 		// HACK: all of this is so broken
-		socket.blocking = true;
-		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
-		//socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 1.seconds);
+		socket.blocking = false;
+		remote.blocking = false;
 
-		remote.blocking = true;
-		remote.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
-		//remote.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, 1.seconds);
+		auto start = MonoTime.currTime;
 
 		bool forward(Socket from, Socket to)
 		{
@@ -173,12 +179,12 @@ private:
 
 			if (length == Socket.ERROR)
 			{
-				return false;
+				return MonoTime.currTime - start < 5.seconds;
 			}
 
 			if (!length)
 			{
-				return false;
+				return wouldHaveBlocked();
 			}
 
 			to.send(buffer[0 .. length]);
@@ -191,11 +197,13 @@ private:
 
 			if (forward(remote, socket))
 			{
+				start = MonoTime.currTime;
 				++count;
 			}
 
 			if (forward(socket, remote))
 			{
+				start = MonoTime.currTime;
 				++count;
 			}
 
@@ -203,6 +211,8 @@ private:
 			{
 				break;
 			}
+
+			Thread.yield();
 		}
 	}
 }

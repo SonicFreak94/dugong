@@ -158,7 +158,7 @@ protected:
 public:
 	this(Socket socket, lazy Duration timeout = 15.seconds)
 	{
-		enforce(socket.isAlive);
+		enforce(socket.isAlive, "socket must be connected!");
 		this.socket = socket;
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
