@@ -13,19 +13,18 @@ import std.range;
 import http.common;
 import http.enums;
 
-// TODO: cookies?
+void badRequest(Socket socket)
+{
+	auto response = new HttpResponse(socket);
+	response.statusCode = HttpStatus.badRequest;
+	response.send();
+}
 
 class HttpResponse : HttpInstance
 {
-private:
-	Appender!(char[]) overflow;
-
 public:
-	string[string] headers;
-	HttpVersion version_;
 	int statusCode;
 	string statusPhrase;
-	ubyte[] body_;
 
 	this(Socket socket, int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
 	{
@@ -36,37 +35,14 @@ public:
 		this.version_     = version_;
 	}
 
-	// performs case insensitive key lookup
-	// TODO: de-dupe (see http.request)
-	string getHeader(in string key)
-	{
-		auto ptr = key in headers;
-
-		if (ptr !is null)
-		{
-			return *ptr;
-		}
-
-		auto search = headers.byPair.find!(x => !sicmp(key, x[0]));
-
-		if (!search.empty)
-		{
-			return takeOne(search).front[1];
-		}
-
-		return null;
-	}
-
-
 	override void clear()
 	{
-		headers    = null;
-		version_   = HttpVersion.v1_1;
-		statusCode = HttpStatus.ok;
-		body_      = null;
+		super.clear();
+		statusCode   = HttpStatus.ok;
+		statusPhrase = null;
 	}
 
-	override void run()
+	void run()
 	{
 		receive();
 	}
@@ -77,7 +53,7 @@ public:
 		s.send(cast(ubyte[])str ~ body_);
 	}
 
-	override void send()
+	void send()
 	{
 		send(socket);
 	}
@@ -100,7 +76,6 @@ public:
 		return result.data;
 	}
 
-private:
 	void receive()
 	{
 		auto line = socket.readln(overflow);
@@ -141,11 +116,4 @@ private:
 			body_ = socket.readChunk(overflow);
 		}
 	}
-}
-
-void badRequest(Socket socket)
-{
-	auto response = new HttpResponse(socket);
-	response.statusCode = HttpStatus.badRequest;
-	response.send();
 }

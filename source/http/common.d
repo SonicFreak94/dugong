@@ -178,6 +178,7 @@ public import http.enums;
 
 @trusted ubyte[] readChunk(Socket socket, ref Appender!(char[]) overflow)
 {
+	// TODO: fix invalid utf sequence (string auto decoding sucks!)
 	Appender!(char[]) result;
 
 	for (char[] line; !(line = socket.readln(overflow)).empty;)
@@ -188,7 +189,7 @@ public import http.enums;
 		}
 		result.writeln();
 
-		auto length = to!size_t((cast(ubyte[])line).assumeUTF(), 16);
+		auto length = to!size_t(line, 16);
 		auto buffer = socket.readlen(overflow, length + 2);
 		result.put(cast(char[])buffer);
 
@@ -198,8 +199,13 @@ public import http.enums;
 		}
 	}
 
-	// TODO: trailers
-	// TODO: fix invalid utf sequence (string auto decoding sucks!)
+	// TODO: check if this even works! (reads trailers (headers))
+	for (char[] line; !(line = socket.readln(overflow)).empty;)
+	{
+		result.writeln(line);
+	}
+
+	result.writeln();
 
 	return cast(ubyte[])result.data;
 }
@@ -221,10 +227,28 @@ public import http.enums;
 	socket.send(builder.data);
 }
 
-abstract class HttpInstance
+// TODO: move to separate module:
+
+interface IHttpInstance
+{
+	bool connected();
+	void disconnect();
+	string getHeader(in string key);
+	void run();
+	void receive();
+	void send(Socket s);
+	void send();
+	void clear();
+}
+
+abstract class HttpInstance : IHttpInstance
 {
 protected:
 	Socket socket;
+	Appender!(char[]) overflow;
+	HttpVersion version_;
+	string[string] headers;
+	ubyte[] body_;
 
 public:
 	this(Socket socket, lazy Duration timeout = 15.seconds)
@@ -237,17 +261,42 @@ public:
 		this.socket.blocking = true;
 	}
 
-	@property bool connected()
+	final bool connected()
 	{
 		return socket.isAlive();
 	}
 
-	void disconnect()
+	final void disconnect()
 	{
 		socket.disconnect();
+		overflow.clear();
 	}
 
-	void run();
-	void send();
-	void clear();
+	final string getHeader(in string key)
+	{
+		import std.uni : sicmp;
+
+		auto ptr = key in headers;
+		if (ptr !is null)
+		{
+			return *ptr;
+		}
+
+		auto search = headers.byPair.find!(x => !sicmp(key, x[0]));
+
+		if (!search.empty)
+		{
+			return takeOne(search).front[1];
+		}
+
+		return null;
+	}
+
+	void clear()
+	{
+		overflow.clear();
+		version_ = HttpVersion.v1_1;
+		headers  = null;
+		body_    = null;
+	}
 }

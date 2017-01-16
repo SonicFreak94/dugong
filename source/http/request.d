@@ -15,58 +15,23 @@ import http;
 
 class HttpRequest : HttpInstance
 {
-private:
-	Appender!(char[]) overflow;
-
 public:
 	HttpMethod method;
 	string requestUrl;
-	HttpVersion version_;
-	string[string] headers;
-	ubyte[] body_;
 
 	this(Socket socket)
 	{
 		super(socket);
 	}
 
-	override void disconnect()
-	{
-		overflow.clear();
-		super.disconnect();
-	}
-
 	override void clear()
 	{
+		super.clear();
 		method     = HttpMethod.none;
 		requestUrl = null;
-		version_   = HttpVersion.none;
-		headers    = null;
-		body_      = null;
-		overflow.clear();
 	}
 
-	// performs case insensitive key lookup
-	string getHeader(in string key)
-	{
-		auto ptr = key in headers;
-
-		if (ptr !is null)
-		{
-			return *ptr;
-		}
-
-		auto search = headers.byPair.find!(x => !sicmp(key, x[0]));
-
-		if (!search.empty)
-		{
-			return takeOne(search).front[1];
-		}
-
-		return null;
-	}
-
-	override void run()
+	void run()
 	{
 		scope (exit)
 		{
@@ -75,6 +40,7 @@ public:
 
 		bool persist;
 
+		// TODO: handle persistent connections better
 		while (connected())
 		{
 			receive();
@@ -87,12 +53,11 @@ public:
 			auto host = getHeader("Host");
 			auto connection = getHeader("Connection");
 
-			/*
+			// Fix for poor HTTP implementations.
 			if (connection.empty)
 			{
 				connection = getHeader("Proxy-Connection");
 			}
-			*/
 
 			switch (version_) with (HttpVersion)
 			{
@@ -133,7 +98,7 @@ public:
 					return;
 
 				case connect:
-					handleConnect();
+					handleConnect(persist);
 					break;
 
 				case get:
@@ -183,7 +148,7 @@ public:
 		s.send(cast(ubyte[])str ~ body_);
 	}
 
-	override void send()
+	void send()
 	{
 		send(socket);
 	}
@@ -203,14 +168,13 @@ public:
 		return result.data;
 	}
 
-private:
 	void receive()
 	{
 		auto line = socket.readln(overflow);
 
 		if (line.empty)
 		{
-			disconnect();
+			//disconnect();
 			return;
 		}
 
@@ -248,11 +212,15 @@ private:
 		body_ = socket.readlen(overflow, to!size_t(length_str));
 	}
 
-	void handleConnect()
+private:
+	void handleConnect(bool persist)
 	{
 		scope (exit)
 		{
-			disconnect();
+			if (!persist)
+			{
+				disconnect();
+			}
 		}
 
 		auto address = requestUrl.split(':');
@@ -264,7 +232,10 @@ private:
 
 		scope (exit)
 		{
-			remote.disconnect();
+			if (!persist)
+			{
+				remote.disconnect();
+			}
 		}
 
 		socket.blocking = false;
