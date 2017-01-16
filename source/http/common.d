@@ -3,9 +3,12 @@ module http.common;
 public import std.socket;
 
 import core.time;
+import std.algorithm;
 import std.array;
+import std.conv;
 import std.exception;
 import std.string;
+import std.range;
 
 public import http.enums;
 
@@ -133,6 +136,74 @@ public import http.enums;
 	return str[0 .. $ - delim.length];
 }
 
+@safe ubyte[] readlen(Socket socket, ref Appender!(char[]) overflow, size_t target)
+{
+	Appender!(char[]) result;
+	char[1024] buffer;
+
+	auto a = overflow.data[0 .. min($, target)];
+	result.put(a);
+
+	if (target < overflow.data.length)
+	{
+		auto b = overflow.data[target .. $].idup;
+		overflow.clear();
+		overflow.put(b);
+	}
+	else
+	{
+		overflow.clear();
+	}
+
+	while (result.data.length < target && socket.isAlive)
+	{
+		auto length = socket.receive(buffer);
+
+		if (!length || length == Socket.ERROR)
+		{
+			break;
+		}
+
+		auto remainder = target - result.data.length;
+		result.put(buffer[0 .. min(length, remainder)]);
+
+		if (remainder < length)
+		{
+			overflow.put(buffer[remainder .. $]);
+		}
+	}
+
+	return result.data.empty ? null : cast(ubyte[])result.data;
+}
+
+@trusted ubyte[] readChunk(Socket socket, ref Appender!(char[]) overflow)
+{
+	Appender!(char[]) result;
+
+	for (char[] line; !(line = socket.readln(overflow)).empty;)
+	{
+		for (int i = 0; i < line.length; i++)
+		{
+			result.put(line[i]);
+		}
+		result.writeln();
+
+		auto length = to!size_t((cast(ubyte[])line).assumeUTF(), 16);
+		auto buffer = socket.readlen(overflow, length + 2);
+		result.put(cast(char[])buffer);
+
+		if (!length)
+		{
+			break;
+		}
+	}
+
+	// TODO: trailers
+	// TODO: fix invalid utf sequence (string auto decoding sucks!)
+
+	return cast(ubyte[])result.data;
+}
+
 @safe void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
@@ -159,9 +230,11 @@ public:
 	this(Socket socket, lazy Duration timeout = 15.seconds)
 	{
 		enforce(socket.isAlive, "socket must be connected!");
+
 		this.socket = socket;
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+		this.socket.blocking = true;
 	}
 
 	@property bool connected()
@@ -176,4 +249,5 @@ public:
 
 	void run();
 	void send();
+	void clear();
 }

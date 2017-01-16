@@ -3,11 +3,13 @@ module http.request;
 import core.thread;
 import core.time;
 
+import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
+import std.range;
 import std.string;
-import std.stdio;
+import std.uni : sicmp;
 
 import http;
 
@@ -34,75 +36,175 @@ public:
 		super.disconnect();
 	}
 
-	override void run()
+	override void clear()
 	{
-		if (!connected())
+		method     = HttpMethod.none;
+		requestUrl = null;
+		version_   = HttpVersion.none;
+		headers    = null;
+		body_      = null;
+		overflow.clear();
+	}
+
+	// performs case insensitive key lookup
+	string getHeader(in string key)
+	{
+		auto ptr = key in headers;
+
+		if (ptr !is null)
 		{
-			disconnect();
-			return;
+			return *ptr;
 		}
 
-		try
+		auto search = headers.byPair.find!(x => !sicmp(key, x[0]));
+
+		if (!search.empty)
 		{
-			parse();
+			return takeOne(search).front[1];
 		}
-		catch (Exception ex)
+
+		return null;
+	}
+
+	override void run()
+	{
+		scope (exit)
 		{
-			synchronized stderr.writeln(ex.msg);
 			disconnect();
-			return;
 		}
 
 		bool persist;
 
-		switch (version_) with (HttpVersion)
+		while (connected())
 		{
-			default:
-				// TODO: 400 (Bad Request)
-				break;
+			receive();
 
-			case v1_0:
-				persist = false;
-				// TODO: check if persistent connection is enabled (non-standard for 1.0)
+			if (!connected())
+			{
 				break;
+			}
 
-			case v1_1:
-				persist = true;
-				// TODO: check if persistent connection is *disabled* (default enabled)
-				if ("Host" !in headers)
-				{
-					// TODO: 400 (Bad Request)
-					disconnect();
+			auto host = getHeader("Host");
+			auto connection = getHeader("Connection");
+
+			/*
+			if (connection.empty)
+			{
+				connection = getHeader("Proxy-Connection");
+			}
+			*/
+
+			switch (version_) with (HttpVersion)
+			{
+				default:
+					auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
+					r.send();
+					break;
+
+				case v1_0:
+					persist = false;
+
+					if (!connection.empty)
+					{
+						persist = !sicmp(connection, "keep-alive");
+					}
+					break;
+
+				case v1_1:
+					if (host.empty)
+					{
+						badRequest(socket);
+						return;
+					}
+
+					persist = true;
+
+					if (!connection.empty)
+					{
+						persist = !!sicmp(connection, "close");
+					}
+					break;
+			}
+
+			switch (method) with (HttpMethod)
+			{
+				case none:
+					badRequest(socket);
 					return;
-				}
+
+				case connect:
+					handleConnect();
+					break;
+
+				case get:
+					// Pull the host from the headers.
+					// If none is present, try to use the request URL.
+					auto i = host.lastIndexOf(":");
+
+					// TODO: proper URL parsing
+					string address;
+					ushort port;
+
+					if (i >= 0)
+					{
+						address = host[0 .. i];
+						port = to!ushort(host[++i .. $]);
+					}
+					else
+					{
+						address = host;
+						port = 80;
+					}
+
+					auto remote = new TcpSocket(new InternetAddress(address, port));
+					send(remote);
+
+					auto r = new HttpResponse(remote);
+					r.run();
+					r.send(socket);
+					break;
+
+				default:
+					break;
+			}
+
+			if (!persist)
+			{
 				break;
+			}
+
+			clear();
 		}
+	}
 
-		switch (method) with (HttpMethod)
-		{
-			case none:
-				// TODO: 400 (Bad Request)?
-				disconnect();
-				break;
-
-			case connect:
-				handleConnect();
-				break;
-
-			default:
-				// TODO: passthrough (and caching obviously)
-				// TODO: check for multipart
-				break;
-		}
+	void send(Socket s)
+	{
+		auto str = toString();
+		s.send(cast(ubyte[])str ~ body_);
 	}
 
 	override void send()
 	{
-		throw new Exception("Not implemented");
+		send(socket);
+	}
+
+	override string toString()
+	{
+		Appender!string result;
+
+		result.writeln(method.toString(), ' ', requestUrl, ' ', version_.toString());
+
+		if (headers.length)
+		{
+			headers.byKeyValue.each!(x => result.writeln(x.key ~ ": " ~ x.value));
+		}
+
+		result.writeln();
+		return result.data;
 	}
 
 private:
-	void parse()
+	void receive()
 	{
 		auto line = socket.readln(overflow);
 
@@ -115,7 +217,6 @@ private:
 		auto elements = line.split();
 		enforce(elements.length > 1, "Too few parameters for request!");
 
-		stderr.writeln("wonjis: ", elements[0]);
 		method = elements[0].toMethod();
 		enforce(method != method.none, "Invalid method: " ~ elements[0]);
 
@@ -137,36 +238,35 @@ private:
 			headers[key.idup] = value.idup;
 		}
 
-		// TODO: body?
+		auto length_str = getHeader("Content-Length");
+
+		if (length_str.empty)
+		{
+			return;
+		}
+
+		body_ = socket.readlen(overflow, to!size_t(length_str));
 	}
 
 	void handleConnect()
 	{
-		Socket remote;
-
-		try
-		{
-			auto address = requestUrl.split(':');
-			remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
-			enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
-
-			auto response = new HttpResponse(socket);
-			response.send();
-		}
-		catch (Exception ex)
-		{
-			synchronized stderr.writeln(ex.msg);
-			disconnect();
-			return;
-		}
-
 		scope (exit)
 		{
 			disconnect();
+		}
+
+		auto address = requestUrl.split(':');
+		auto remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
+		enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
+
+		auto response = new HttpResponse(socket);
+		response.send();
+
+		scope (exit)
+		{
 			remote.disconnect();
 		}
 
-		// HACK: all of this is so broken
 		socket.blocking = false;
 		remote.blocking = false;
 
@@ -204,9 +304,14 @@ private:
 				break;
 			}
 
-			if (errors.isSet(socket) || errors.isSet(remote))
+			if (errors.isSet(socket))
 			{
-				break;
+				throw new Exception(socket.getErrorText());
+			}
+
+			if (errors.isSet(remote))
+			{
+				throw new Exception(remote.getErrorText());
 			}
 
 			int count;
