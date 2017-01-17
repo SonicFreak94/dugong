@@ -57,6 +57,7 @@ public:
 						continue;
 
 					case get:
+					case head:
 						if (!receive())
 						{
 							continue;
@@ -86,11 +87,11 @@ public:
 					return;
 
 				case connect:
-					//debug disconnect();
-					/*else*/ handleConnect();
+					handleConnect();
 					break;
 
 				case get:
+				case head:
 					// Pull the host from the headers.
 					// If none is present, try to use the request URL.
 					auto i = host.lastIndexOf(":");
@@ -117,6 +118,7 @@ public:
 
 					send(remote);
 					auto r = new HttpResponse(remote);
+					// TODO: don't try to receive the body!
 					r.receive();
 					r.send(socket);
 
