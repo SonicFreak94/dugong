@@ -68,7 +68,7 @@ void disconnect(ref Socket socket)
 	}
 }
 
-@trusted ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output, const char[] delim = "\r\n")
+@safe ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output, const char[] delim = "\r\n")
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
