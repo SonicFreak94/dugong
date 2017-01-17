@@ -86,8 +86,8 @@ public:
 					return;
 
 				case connect:
-					debug disconnect();
-					else handleConnect();
+					//debug disconnect();
+					/*else*/ handleConnect();
 					break;
 
 				case get:
@@ -127,6 +127,12 @@ public:
 					break;
 
 				default:
+					debug import std.stdio;
+					debug synchronized
+					{
+						stderr.write(method.toString());
+						stderr.writeln();
+					}
 					break;
 			}
 
@@ -221,7 +227,7 @@ private:
 
 		if (!length || length == Socket.ERROR)
 		{
-			return false;
+			return length == Socket.ERROR;
 		}
 
 		to.send(buffer[0 .. length]);
@@ -240,9 +246,9 @@ private:
 			reads.add(remote);
 			reads.add(socket);
 
-			if (Socket.select(reads, null, errors) <= 0)
+			if (Socket.select(reads, null, errors, 5.seconds) <= 0)
 			{
-				persistent = false;
+				disconnect();
 				break;
 			}
 
@@ -270,15 +276,8 @@ private:
 
 			if (!count)
 			{
+				disconnect();
 				break;
-			}
-
-			scope (exit)
-			{
-				if (!persistent)
-				{
-					disconnect();
-				}
 			}
 		}
 	}

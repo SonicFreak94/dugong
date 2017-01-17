@@ -41,7 +41,7 @@ protected:
 	bool chunked;
 
 public:
-	this(Socket socket, lazy Duration timeout = 15.seconds)
+	this(Socket socket, lazy Duration timeout = 5.seconds)
 	{
 		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");
