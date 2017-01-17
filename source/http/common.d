@@ -210,7 +210,7 @@ const enum HTTP_BREAK = "\r\n";
 		yield(cast(ubyte[])(line ~ HTTP_BREAK) ~ buffer); // trusted
 		result.put(buffer);
 
-		if (!length)
+		if (!length || line.empty)
 		{
 			break;
 		}
