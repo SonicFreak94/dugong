@@ -5,8 +5,8 @@ import core.time;
 
 import std.algorithm;
 import std.array;
-import std.stdio;
 import std.socket;
+import std.stdio;
 
 import http;
 import threadqueue;

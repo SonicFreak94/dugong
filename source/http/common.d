@@ -6,11 +6,11 @@ import core.time;
 
 import std.algorithm;
 import std.array;
+import std.concurrency;
 import std.conv;
 import std.exception;
-import std.string;
 import std.range;
-import std.concurrency;
+import std.string;
 
 // TODO: use a range (or even array) instead of appender for overflow buffers
 

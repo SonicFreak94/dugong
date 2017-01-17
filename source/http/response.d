@@ -2,14 +2,14 @@ module http.response;
 
 import core.time;
 
-import std.string;
 import std.algorithm;
 import std.array;
+import std.concurrency;
 import std.conv;
 import std.exception;
-import std.uni : sicmp;
 import std.range;
-import std.concurrency;
+import std.string;
+import std.uni : sicmp;
 
 import http.instance;
 import http.common;
