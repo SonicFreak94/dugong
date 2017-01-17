@@ -14,26 +14,28 @@ import std.string;
 
 // TODO: use a range (or even array) instead of appender for overflow buffers
 
-@safe char[] getln(ref Appender!(char[]) str, const char[] delim)
+const enum HTTP_BREAK = "\r\n";
+
+@safe char[] getln(ref Appender!(char[]) str)
 {
 	if (str.data.empty)
 	{
 		return null;
 	}
 
-	auto index = str.data.indexOf(delim);
+	auto index = str.data.indexOf(HTTP_BREAK);
 	if (index < 0)
 	{
 		return null;
 	}
 
-	return str.data[0 .. index + delim.length];
+	return str.data[0 .. index + HTTP_BREAK.length];
 }
 
-@safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const char[] delim)
+@safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
-	auto result = input.getln(delim);
+	auto result = input.getln();
 
 	if (result.empty)
 	{
@@ -59,7 +61,7 @@ import std.string;
 	return result;
 }
 
-void disconnect(ref Socket socket)
+@safe void disconnect(ref Socket socket)
 {
 	if (socket !is null)
 	{
@@ -68,7 +70,7 @@ void disconnect(ref Socket socket)
 	}
 }
 
-@safe ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output, const char[] delim = "\r\n")
+@safe ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
@@ -81,7 +83,7 @@ void disconnect(ref Socket socket)
 		return 0;
 	}
 
-	if (overflow.data == delim)
+	if (overflow.data == HTTP_BREAK)
 	{
 		overflow.clear();
 		return -1;
@@ -90,7 +92,7 @@ void disconnect(ref Socket socket)
 	result.put(overflow.data);
 	overflow.clear();
 
-	auto str = result.overflow(overflow, delim);
+	auto str = result.overflow(overflow);
 
 	if (str.empty)
 	{
@@ -106,7 +108,7 @@ void disconnect(ref Socket socket)
 				break;
 			}
 
-			index = buffer.indexOf(delim);
+			index = buffer.indexOf(HTTP_BREAK);
 
 			if (index < 0)
 			{
@@ -114,7 +116,7 @@ void disconnect(ref Socket socket)
 			}
 			else
 			{
-				auto i = index + delim.length;
+				auto i = index + HTTP_BREAK.length;
 				result.put(buffer[0 .. i].dup);
 
 				if (i < length)
@@ -123,7 +125,7 @@ void disconnect(ref Socket socket)
 				}
 			}
 
-			str = result.overflow(overflow, delim);
+			str = result.overflow(overflow);
 			if (!str.empty)
 			{
 				break;
@@ -136,11 +138,11 @@ void disconnect(ref Socket socket)
 		return rlength;
 	}
 
-	enforce(str.count("\r\n") == 1, `Parse failed: more than one line break in output.`);
-	enforce(str.endsWith("\r\n"),   `Parse failed: output does not end with line break.`);
-	enforce(result.data.empty,      `Unhandled data still remains in the buffer.`);
+	enforce(str.endsWith(HTTP_BREAK),   `Parse failed: output does not end with line break.`);
+	enforce(str.count(HTTP_BREAK) == 1, `Parse failed: more than one line break in output.`);
+	enforce(result.data.empty,          `Unhandled data still remains in the buffer.`);
 
-	output = str[0 .. $ - delim.length];
+	output = str[0 .. $ - HTTP_BREAK.length];
 	return output.length;
 }
 
@@ -205,7 +207,7 @@ void disconnect(ref Socket socket)
 		auto length = to!size_t(line, 16);
 		socket.readlen(overflow, buffer, length + 2);
 
-		yield(cast(ubyte[])(line ~ "\r\n") ~ buffer);
+		yield(cast(ubyte[])(line ~ HTTP_BREAK) ~ buffer); // trusted
 		result.put(buffer);
 
 		if (!length)
@@ -220,7 +222,7 @@ void disconnect(ref Socket socket)
 		for (char[] line; socket.readln(overflow, line);)
 		{
 			result.writeln(line);
-			yield(cast(ubyte[])(line ~ "\r\n"));
+			yield(cast(ubyte[])(line ~ HTTP_BREAK)); // trusted
 		}
 	}
 
@@ -234,7 +236,7 @@ void disconnect(ref Socket socket)
 		output.put(a);
 	}
 
-	output.put("\r\n");
+	output.put(HTTP_BREAK);
 }
 
 @safe void writeln(A...)(ref Socket socket, A args)
