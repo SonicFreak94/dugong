@@ -197,7 +197,6 @@ const enum HTTP_BREAK = "\r\n";
 
 @trusted ubyte[] readChunk(ref Socket socket, ref Appender!(char[]) overflow)
 {
-	// TODO: fix invalid utf sequence (string auto decoding sucks!)
 	Appender!(char[]) result;
 
 	for (char[] line; socket.readln(overflow, line);)
