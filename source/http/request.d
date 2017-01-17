@@ -14,6 +14,8 @@ class HttpRequest : HttpInstance
 {
 private:
 	Socket remote;
+	HttpResponse response;
+	bool established;
 
 public:
 	HttpMethod method;
@@ -35,8 +37,25 @@ public:
 	{
 		super.disconnect();
 		enforce(socket is null);
-		remote.disconnect();
-		remote = null;
+		closeRemote();
+	}
+
+	bool handleConnection()
+	{
+		if (method == HttpMethod.connect)
+		{
+			handleConnect();
+			return false;
+		}
+
+		clear();
+
+		if (!receive() || !checkRemote())
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	void run()
@@ -48,28 +67,17 @@ public:
 
 		while (connected())
 		{
-			if (remote !is null && remote.isAlive)
+			if (established)
 			{
-				switch (method) with (HttpMethod)
+				if (!handleConnection())
 				{
-					case connect:
-						connectProxy();
-						continue;
-
-					case get:
-					case head:
-						if (!receive())
-						{
-							continue;
-						}
-						break;
-
-					default:
-						throw new Exception("Unsupported method for persistent connections: " ~ method.toString());
+					continue;
 				}
 			}
 			else if (!receive())
 			{
+				// TODO: when concurrency happens, yield
+				Thread.sleep(1.msecs);
 				continue;
 			}
 
@@ -78,6 +86,7 @@ public:
 				break;
 			}
 
+			established = isPersistent;
 			auto host = getHeader("Host");
 
 			switch (method) with (HttpMethod)
@@ -111,20 +120,20 @@ public:
 						port = 80;
 					}
 
-					if (remote is null || !remote.isAlive)
+					if (!checkRemote())
 					{
 						remote = new TcpSocket(new InternetAddress(address, port));
 					}
 
 					send(remote);
-					auto r = new HttpResponse(remote);
-					// TODO: don't try to receive the body!
-					r.receive();
-					r.send(socket);
 
-					if (!r.isPersistent)
+					response = new HttpResponse(remote, method != head);
+					response.receive();
+					response.send(socket);
+
+					if (checkRemote() && !response.isPersistent)
 					{
-						r.disconnect();
+						response.disconnect();
 					}
 					break;
 
@@ -132,13 +141,12 @@ public:
 					debug import std.stdio;
 					debug synchronized
 					{
-						stderr.write(method.toString());
-						stderr.writeln();
+						stderr.writeln(method.toString());
 					}
 					break;
 			}
 
-			if (!persistent)
+			if (!isPersistent)
 			{
 				break;
 			}
@@ -205,19 +213,74 @@ public:
 		}
 
 		super.parseHeaders();
+
+		debug import std.stdio;
+		debug synchronized stderr.writeln(toString());
+		debug synchronized stderr.writeln();
 		return true;
 	}
 
 private:
+	void closeRemote()
+	{
+		if (response !is null)
+		{
+			response.disconnect();
+			response = null;
+		}
+
+		remote.disconnect();
+		remote = null;
+	}
+
+	bool checkRemote()
+	{
+		if (remote is null)
+		{
+			return false;
+		}
+
+		if (!remote.isAlive)
+		{
+			closeRemote();
+			return false;
+		}
+
+		return true;
+	}
+
 	void handleConnect()
 	{
-		auto address = requestUrl.split(':');
+		if (!checkRemote())
+		{
+			try
+			{
+				auto address = requestUrl.split(':');
+				auto remoteAddr = new InternetAddress(address[0], to!ushort(address[1]));
+				remote = new TcpSocket(remoteAddr);
+				enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
+			}
+			catch (Exception ex)
+			{
+				remote = null;
 
-		remote = new TcpSocket(new InternetAddress(address[0], to!ushort(address[1])));
-		enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
+				try
+				{
+					clear();
+					auto r = new HttpResponse(socket, HttpStatus.notFound);
+					r.send();
+				}
+				catch (Throwable)
+				{
+					// ignored
+				}
 
-		auto response = new HttpResponse(socket);
-		response.send();
+				return;
+			}
+
+			auto response = new HttpResponse(socket);
+			response.send();
+		}
 
 		connectProxy();
 	}
@@ -227,9 +290,15 @@ private:
 		ubyte[1024] buffer;
 		auto length = from.receive(buffer);
 
-		if (!length || length == Socket.ERROR)
+		if (!length)
 		{
-			return length == Socket.ERROR;
+			from.disconnect();
+			return false;
+		}
+
+		if (length == Socket.ERROR)
+		{
+			return true;
 		}
 
 		to.send(buffer[0 .. length]);
@@ -241,7 +310,7 @@ private:
 		auto errors = new SocketSet();
 		auto reads  = new SocketSet();
 
-		while (socket.isAlive && remote.isAlive)
+		while (socket.isAlive && checkRemote())
 		{
 			errors.add(remote);
 			errors.add(socket);
@@ -250,7 +319,7 @@ private:
 
 			if (Socket.select(reads, null, errors, 5.seconds) <= 0)
 			{
-				disconnect();
+				closeRemote();
 				break;
 			}
 
@@ -258,8 +327,7 @@ private:
 			{
 				throw new Exception(socket.getErrorText());
 			}
-
-			if (errors.isSet(remote))
+			else if (errors.isSet(remote))
 			{
 				throw new Exception(remote.getErrorText());
 			}
@@ -270,7 +338,6 @@ private:
 			{
 				++count;
 			}
-
 			if (reads.isSet(socket) && forward(socket, remote))
 			{
 				++count;
@@ -278,7 +345,7 @@ private:
 
 			if (!count)
 			{
-				disconnect();
+				closeRemote();
 				break;
 			}
 		}

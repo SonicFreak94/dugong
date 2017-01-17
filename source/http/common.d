@@ -72,6 +72,8 @@ const enum HTTP_BREAK = "\r\n";
 
 @safe ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
+	enforce(socket.blocking, "socket must be blocking");
+
 	Appender!(char[]) result;
 	char[1024] buffer;
 	ptrdiff_t index = -1;
@@ -99,11 +101,15 @@ const enum HTTP_BREAK = "\r\n";
 		while (index < 0 && socket.isAlive)
 		{
 			auto length = socket.receive(buffer);
-			rlength = length;
+			rlength = max(0, length);
+
+			if (!length)
+			{
+				socket.disconnect();
+			}
 
 			if (!length || length == Socket.ERROR)
 			{
-				rlength = 0;
 				overflow.clear();
 				break;
 			}

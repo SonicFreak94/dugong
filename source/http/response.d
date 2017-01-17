@@ -28,19 +28,26 @@ public:
 	int statusCode;
 	string statusPhrase;
 
-	this(Socket socket, int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
+	this(Socket socket, bool hasBody,
+		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
 	{
-		super(socket);
+		super(socket, hasBody);
 
 		this.statusCode   = statusCode;
 		this.statusPhrase = statusPhrase;
 		this.version_     = version_;
 	}
 
+	this(Socket socket,
+		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
+	{
+		this(socket, true, statusCode, statusPhrase, version_);
+	}
+
 	override void clear()
 	{
 		super.clear();
-		statusCode   = HttpStatus.ok;
+		statusCode = HttpStatus.none;
 		statusPhrase = null;
 	}
 
@@ -53,7 +60,7 @@ public:
 	{
 		auto str = toString();
 
-		if (body_.empty)
+		if (hasBody && body_.empty)
 		{
 			s.send(str);
 
@@ -97,6 +104,8 @@ public:
 
 	bool receive()
 	{
+		clear();
+
 		char[] line;
 		if (!socket.readln(overflow, line) && line.empty)
 		{
@@ -119,6 +128,9 @@ public:
 		statusPhrase = line.idup;
 
 		super.parseHeaders();
+		debug import std.stdio;
+		debug synchronized stderr.writeln(toString());
+		debug synchronized stderr.writeln();
 		return true;
 	}
 

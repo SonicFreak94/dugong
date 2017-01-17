@@ -30,23 +30,27 @@ interface IHttpInstance
 
 abstract class HttpInstance : IHttpInstance
 {
+private:
+	bool persistent;
+	bool hasBody_;
+	bool chunked;
+
 protected:
 	Socket socket;
-	bool persistent;
 
 	Appender!(char[]) overflow;
 	HttpVersion version_;
 	string[string] headers;
 	ubyte[] body_;
-	bool chunked;
 
 public:
-	this(Socket socket, lazy Duration timeout = 5.seconds)
+	this(Socket socket, bool hasBody = true, lazy Duration timeout = 5.seconds)
 	{
 		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");
 
 		this.socket = socket;
+		this.hasBody_ = hasBody;
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
 		this.socket.blocking = true;
@@ -73,6 +77,7 @@ public:
 
 final:
 	@property bool isPersistent() { return persistent; }
+	@property bool hasBody() { return hasBody_; }
 	@property bool isChunked() { return chunked; }
 
 	bool connected()
@@ -102,6 +107,7 @@ final:
 
 	void parseHeaders()
 	{
+		ptrdiff_t rlength = -1;
 		for (char[] header; socket.readln(overflow, header) && !header.empty;)
 		{
 			auto key = header.munch("^:");
@@ -109,6 +115,8 @@ final:
 			auto value = header;
 			headers[key.idup] = value.idup;
 		}
+
+		chunked = !getHeader("Transfer-Encoding").empty;
 
 		auto connection = getHeader("Connection");
 		if (connection.empty)
@@ -127,19 +135,29 @@ final:
 				break;
 
 			default:
-				auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
-				r.send();
+				if (socket.isAlive)
+				{
+					auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
+					r.send();
+				}
+
 				disconnect();
 				return;
 		}
 
-		auto length = getHeader("Content-Length");
-		if (!length.empty)
+		if (!socket.isAlive)
 		{
-			socket.readlen(overflow, body_, to!size_t(length));
+			disconnect();
 		}
 
-		chunked = !getHeader("Transfer-Encoding").empty;
+		if (hasBody)
+		{
+			auto length = getHeader("Content-Length");
+			if (!length.empty)
+			{
+				socket.readlen(overflow, body_, to!size_t(length));
+			}
+		}
 	}
 
 	string toHeaderString()
