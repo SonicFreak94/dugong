@@ -3,6 +3,7 @@ module http.common;
 public import std.socket;
 
 import core.time;
+
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -11,10 +12,7 @@ import std.string;
 import std.range;
 import std.concurrency;
 
-import http.enums;
-
-// TODO: interface (run, connected, etc)
-// TODO: outbound socket pool
+// TODO: use a range (or even array) instead of appender for overflow buffers
 
 @safe char[] getln(ref Appender!(char[]) str, const char[] delim)
 {
@@ -30,12 +28,6 @@ import http.enums;
 	}
 
 	return str.data[0 .. index + delim.length];
-}
-
-@safe void disconnect(Socket socket)
-{
-	socket.shutdown(SocketShutdown.BOTH);
-	socket.close();
 }
 
 @safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output, const char[] delim)
@@ -67,21 +59,32 @@ import http.enums;
 	return result;
 }
 
-@safe char[] readln(Socket socket, ref Appender!(char[]) overflow, const char[] delim = "\r\n")
+void disconnect(ref Socket socket)
+{
+	if (socket !is null)
+	{
+		socket.shutdown(SocketShutdown.BOTH);
+		socket.close();
+	}
+}
+
+@trusted ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output, const char[] delim = "\r\n")
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
 	ptrdiff_t index = -1;
+	ptrdiff_t rlength = -1;
 
 	if (!socket.isAlive)
 	{
-		return null;
+		overflow.clear();
+		return 0;
 	}
 
 	if (overflow.data == delim)
 	{
 		overflow.clear();
-		return null;
+		return -1;
 	}
 
 	result.put(overflow.data);
@@ -94,9 +97,12 @@ import http.enums;
 		while (index < 0 && socket.isAlive)
 		{
 			auto length = socket.receive(buffer);
+			rlength = length;
 
 			if (!length || length == Socket.ERROR)
 			{
+				rlength = 0;
+				overflow.clear();
 				break;
 			}
 
@@ -127,27 +133,29 @@ import http.enums;
 
 	if (str.empty)
 	{
-		return null;
+		return rlength;
 	}
 
 	enforce(str.count("\r\n") == 1, `Parse failed: more than one line break in output.`);
 	enforce(str.endsWith("\r\n"),   `Parse failed: output does not end with line break.`);
 	enforce(result.data.empty,      `Unhandled data still remains in the buffer.`);
 
-	return str[0 .. $ - delim.length];
+	output = str[0 .. $ - delim.length];
+	return output.length;
 }
 
-@safe ubyte[] readlen(Socket socket, ref Appender!(char[]) overflow, size_t target)
+@safe ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
+	ptrdiff_t rlength = -1;
 
-	auto a = overflow.data[0 .. min($, target)];
+	auto a = overflow.data[0 .. min($, target)].dup;
 	result.put(a);
 
 	if (target < overflow.data.length)
 	{
-		auto b = overflow.data[target .. $].idup;
+		auto b = overflow.data[target .. $].dup;
 		overflow.clear();
 		overflow.put(b);
 	}
@@ -159,6 +167,7 @@ import http.enums;
 	while (result.data.length < target && socket.isAlive)
 	{
 		auto length = socket.receive(buffer);
+		rlength = length;
 
 		if (!length || length == Socket.ERROR)
 		{
@@ -166,51 +175,54 @@ import http.enums;
 		}
 
 		auto remainder = target - result.data.length;
-		result.put(buffer[0 .. min(length, remainder)]);
+		result.put(buffer[0 .. min(length, remainder)].dup);
 
 		if (remainder < length)
 		{
-			overflow.put(buffer[remainder .. $]);
+			overflow.put(buffer[remainder .. length].dup);
 		}
 	}
 
-	return result.data.empty ? null : cast(ubyte[])result.data;
+	output = result.data.empty ? null : cast(ubyte[])result.data;
+	return rlength;
 }
 
-@trusted ubyte[] readChunk(Socket socket, ref Appender!(char[]) overflow)
+@trusted ubyte[] readChunk(ref Socket socket, ref Appender!(char[]) overflow)
 {
 	// TODO: fix invalid utf sequence (string auto decoding sucks!)
 	Appender!(char[]) result;
 
-	for (char[] line; !(line = socket.readln(overflow)).empty;)
+	for (char[] line; socket.readln(overflow, line);)
 	{
-		for (int i = 0; i < line.length; i++)
+		if (line.empty)
 		{
-			result.put(line[i]);
+			continue;
 		}
-		result.writeln();
 
+		result.writeln(line);
+
+		ubyte[] buffer;
 		auto length = to!size_t(line, 16);
-		auto buffer = socket.readlen(overflow, length + 2);
-		result.put(cast(char[])buffer);
+		socket.readlen(overflow, buffer, length + 2);
+
+		yield(cast(ubyte[])(line ~ "\r\n") ~ buffer);
+		result.put(buffer);
 
 		if (!length)
 		{
 			break;
 		}
-
-		yield(cast(ubyte[])(line ~ "\r\n") ~ buffer);
 	}
 
-	// TODO: check if this even works! (reads trailers (headers))
-	for (char[] line; !(line = socket.readln(overflow)).empty;)
+	if (!overflow.data.empty)
 	{
-		result.writeln(line);
-		yield(cast(ubyte[])(line ~ "\r\n"));
+		// TODO: check if this even works! (reads trailers (headers))
+		for (char[] line; socket.readln(overflow, line);)
+		{
+			result.writeln(line);
+			yield(cast(ubyte[])(line ~ "\r\n"));
+		}
 	}
-
-	result.writeln();
-	yield(cast(ubyte[])"\r\n");
 
 	return cast(ubyte[])result.data;
 }
@@ -225,7 +237,7 @@ import http.enums;
 	output.put("\r\n");
 }
 
-@safe void writeln(A...)(Socket socket, A args)
+@safe void writeln(A...)(ref Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);

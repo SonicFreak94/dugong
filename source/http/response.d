@@ -57,9 +57,7 @@ public:
 		{
 			s.send(str);
 
-			auto transferEncoding = getHeader("Transfer-Encoding");
-
-			if (!transferEncoding.empty)
+			if (isChunked)
 			{
 				foreach (buffer; getChunks())
 				{
@@ -87,9 +85,10 @@ public:
 			' ', statusPhrase.empty ? (cast(HttpStatus)statusCode).toString() : statusPhrase
 		);
 
-		if (headers.length)
+		auto headerString = super.toHeaderString();
+		if (!headerString.empty)
 		{
-			headers.byKeyValue.each!(x => result.writeln(x.key ~ ": " ~ x.value));
+			result.writeln(headerString);
 		}
 
 		result.writeln();
@@ -98,7 +97,12 @@ public:
 
 	bool receive()
 	{
-		auto line = socket.readln(overflow);
+		char[] line;
+		if (!socket.readln(overflow, line) && line.empty)
+		{
+			disconnect();
+			return false;
+		}
 
 		if (line.empty)
 		{
@@ -112,28 +116,15 @@ public:
 		statusCode = parse!int(line);
 		line.munch(" ");
 
-		statusPhrase = to!string(line);
+		statusPhrase = line.idup;
 
-		for (char[] header; !(header = socket.readln(overflow)).empty;)
-		{
-			auto key = header.munch("^:");
-			header.munch(": ");
-			auto value = header;
-			headers[key.idup] = value.idup;
-		}
-
-		auto length = getHeader("Content-Length");
-		if (!length.empty)
-		{
-			body_ = socket.readlen(overflow, to!size_t(length));
-		}
-
+		super.parseHeaders();
 		return true;
 	}
 
 	Generator!(ubyte[]) getChunks()
 	{
-		enforce(!getHeader("Transfer-Encoding").empty, "getChunks() called on response with no chunked data.");
+		enforce(isChunked, "getChunks() called on response with no chunked data.");
 
 		return new Generator!(ubyte[])(
 		{

@@ -15,7 +15,7 @@ ushort proxyPort = 3128;
 
 int main(string[] argv)
 {
-	auto listener = new TcpSocket();
+	Socket listener = new TcpSocket();
 	listener.bind(new InternetAddress(proxyPort));
 	listener.blocking = false;
 	listener.listen(1);

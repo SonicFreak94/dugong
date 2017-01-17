@@ -3,14 +3,10 @@ module http.request;
 import core.thread;
 import core.time;
 
-import std.algorithm;
 import std.array;
 import std.conv;
-import std.concurrency;
 import std.exception;
-import std.range;
 import std.string;
-import std.uni : sicmp;
 
 import http;
 
@@ -18,7 +14,6 @@ class HttpRequest : HttpInstance
 {
 private:
 	Socket remote;
-	bool persistent;
 
 public:
 	HttpMethod method;
@@ -39,6 +34,7 @@ public:
 	override void disconnect()
 	{
 		super.disconnect();
+		enforce(socket is null);
 		remote.disconnect();
 		remote = null;
 	}
@@ -82,45 +78,6 @@ public:
 			}
 
 			auto host = getHeader("Host");
-			auto connection = getHeader("Connection");
-
-			// Fix for poor HTTP implementations.
-			if (connection.empty)
-			{
-				connection = getHeader("Proxy-Connection");
-			}
-
-			switch (version_) with (HttpVersion)
-			{
-				default:
-					auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
-					r.send();
-					break;
-
-				case v1_0:
-					persistent = false;
-
-					if (!connection.empty)
-					{
-						persistent = !sicmp(connection, "keep-alive");
-					}
-					break;
-
-				case v1_1:
-					if (host.empty)
-					{
-						badRequest(socket);
-						return;
-					}
-
-					persistent = true;
-
-					if (!connection.empty)
-					{
-						persistent = !!sicmp(connection, "close");
-					}
-					break;
-			}
 
 			switch (method) with (HttpMethod)
 			{
@@ -129,7 +86,8 @@ public:
 					return;
 
 				case connect:
-					handleConnect();
+					debug disconnect();
+					else handleConnect();
 					break;
 
 				case get:
@@ -161,6 +119,11 @@ public:
 					auto r = new HttpResponse(remote);
 					r.receive();
 					r.send(socket);
+
+					if (!r.isPersistent)
+					{
+						r.disconnect();
+					}
 					break;
 
 				default:
@@ -191,9 +154,10 @@ public:
 
 		result.writeln(method.toString(), ' ', requestUrl, ' ', version_.toString());
 
-		if (headers.length)
+		auto headerString = super.toHeaderString();
+		if (!headerString.empty)
 		{
-			headers.byKeyValue.each!(x => result.writeln(x.key ~ ": " ~ x.value));
+			result.writeln(headerString);
 		}
 
 		result.writeln();
@@ -202,11 +166,17 @@ public:
 
 	bool receive()
 	{
-		auto line = socket.readln(overflow);
+		char[] line;
+
+		if (!socket.readln(overflow, line) && line.empty)
+		{
+			import std.stdio;
+			disconnect();
+			return false;
+		}
 
 		if (line.empty)
 		{
-			yield();
 			return false;
 		}
 
@@ -226,21 +196,7 @@ public:
 			requestUrl = elements[1].idup;
 		}
 
-		for (char[] header; !(header = socket.readln(overflow)).empty;)
-		{
-			auto key = header.munch("^:");
-			header.munch(": ");
-			auto value = header;
-			headers[key.idup] = value.idup;
-		}
-
-		auto length_str = getHeader("Content-Length");
-
-		if (!length_str.empty)
-		{
-			body_ = socket.readlen(overflow, to!size_t(length_str));
-		}
-
+		super.parseHeaders();
 		return true;
 	}
 
@@ -263,12 +219,7 @@ private:
 		ubyte[1024] buffer;
 		auto length = from.receive(buffer);
 
-		if (length == Socket.ERROR)
-		{
-			return false;
-		}
-
-		if (!length)
+		if (!length || length == Socket.ERROR)
 		{
 			return false;
 		}
@@ -316,8 +267,6 @@ private:
 			{
 				++count;
 			}
-
-			Thread.yield();
 
 			if (!count)
 			{

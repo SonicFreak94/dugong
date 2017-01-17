@@ -8,9 +8,13 @@ import std.algorithm;
 import std.array;
 import std.exception;
 import std.range;
+import std.string;
+import std.uni : sicmp;
+import std.conv;
 
 import http.common;
 import http.enums;
+import http.response;
 
 interface IHttpInstance
 {
@@ -28,14 +32,18 @@ abstract class HttpInstance : IHttpInstance
 {
 protected:
 	Socket socket;
+	bool persistent;
+
 	Appender!(char[]) overflow;
 	HttpVersion version_;
 	string[string] headers;
 	ubyte[] body_;
+	bool chunked;
 
 public:
 	this(Socket socket, lazy Duration timeout = 15.seconds)
 	{
+		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");
 
 		this.socket = socket;
@@ -44,18 +52,35 @@ public:
 		this.socket.blocking = true;
 	}
 
-	final bool connected()
-	{
-		return socket.isAlive();
-	}
-
 	void disconnect()
 	{
 		socket.disconnect();
+		socket = null;
 		clear();
 	}
 
-	final string getHeader(in string key)
+	void clear()
+	{
+		overflow.clear();
+
+		persistent = false;
+		version_   = HttpVersion.v1_1;
+		headers    = null;
+		body_      = null;
+		chunked    = false;
+	}
+
+
+final:
+	@property bool isPersistent() { return persistent; }
+	@property bool isChunked() { return chunked; }
+
+	bool connected()
+	{
+		return socket !is null && socket.isAlive;
+	}
+
+	string getHeader(in string key)
 	{
 		import std.uni : sicmp;
 
@@ -75,11 +100,55 @@ public:
 		return null;
 	}
 
-	void clear()
+	void parseHeaders()
 	{
-		overflow.clear();
-		version_ = HttpVersion.v1_1;
-		headers  = null;
-		body_    = null;
+		for (char[] header; socket.readln(overflow, header) && !header.empty;)
+		{
+			auto key = header.munch("^:");
+			header.munch(": ");
+			auto value = header;
+			headers[key.idup] = value.idup;
+		}
+
+		auto connection = getHeader("Connection");
+		if (connection.empty)
+		{
+			connection = getHeader("Proxy-Connection");
+		}
+
+		switch (version_) with (HttpVersion)
+		{
+			case v1_0:
+				persistent = !sicmp(connection, "keep-alive");
+				break;
+
+			case v1_1:
+				persistent = !!sicmp(connection, "close");
+				break;
+
+			default:
+				auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
+				r.send();
+				disconnect();
+				return;
+		}
+
+		auto length = getHeader("Content-Length");
+		if (!length.empty)
+		{
+			socket.readlen(overflow, body_, to!size_t(length));
+		}
+
+		chunked = !getHeader("Transfer-Encoding").empty;
+	}
+
+	string toHeaderString()
+	{
+		if (!headers.length)
+		{
+			return null;
+		}
+
+		return headers.byKeyValue.map!(x => x.key ~ ": " ~ x.value).join("\r\n");
 	}
 }
