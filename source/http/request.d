@@ -92,7 +92,7 @@ public:
 			switch (method) with (HttpMethod)
 			{
 				case none:
-					badRequest(socket);
+					socket.sendBadRequest();
 					return;
 
 				case connect:
@@ -122,7 +122,17 @@ public:
 
 					if (!checkRemote())
 					{
-						remote = new TcpSocket(new InternetAddress(address, port));
+						try
+						{
+							remote = new TcpSocket(new InternetAddress(address, port));
+						}
+						catch (Throwable)
+						{
+							remote = null;
+							clear();
+							socket.sendNotFound();
+							break;
+						}
 					}
 
 					send(remote);
@@ -151,17 +161,6 @@ public:
 				break;
 			}
 		}
-	}
-
-	void send(Socket s)
-	{
-		auto str = toString();
-		s.send(cast(ubyte[])str ~ body_);
-	}
-
-	void send()
-	{
-		send(socket);
 	}
 
 	override string toString()
@@ -216,7 +215,6 @@ public:
 
 		debug import std.stdio;
 		debug synchronized stderr.writeln(toString());
-		debug synchronized stderr.writeln();
 		return true;
 	}
 
@@ -267,8 +265,7 @@ private:
 				try
 				{
 					clear();
-					auto r = new HttpResponse(socket, HttpStatus.notFound);
-					r.send();
+					socket.sendNotFound();
 				}
 				catch (Throwable)
 				{

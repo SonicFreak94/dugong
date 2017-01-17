@@ -6,6 +6,7 @@ import core.time;
 
 import std.algorithm;
 import std.array;
+import std.concurrency;
 import std.conv;
 import std.exception;
 import std.range;
@@ -74,6 +75,32 @@ public:
 		chunked    = false;
 	}
 
+	void send(Socket s)
+	{
+		auto str = toString();
+
+		if (hasBody && body_.empty)
+		{
+			s.send(str);
+
+			if (isChunked)
+			{
+				foreach (buffer; getChunks())
+				{
+					s.send(buffer);
+				}
+			}
+		}
+		else
+		{
+			s.send(cast(ubyte[])str ~ body_);
+		}
+	}
+
+	void send()
+	{
+		send(socket);
+	}
 
 final:
 	@property bool isPersistent() { return persistent; }
@@ -110,10 +137,16 @@ final:
 		ptrdiff_t rlength = -1;
 		for (char[] header; socket.readln(overflow, header) && !header.empty;)
 		{
-			auto key = header.munch("^:");
+			auto key = header.munch("^:").idup;
 			header.munch(": ");
-			auto value = header;
-			headers[key.idup] = value.idup;
+
+			// Skip duplicate Content-Length headers.
+			if (!sicmp(key, "Content-Length") && !getHeader(key).empty)
+			{
+				continue;
+			}
+
+			headers[key] = header.idup;
 		}
 
 		chunked = !getHeader("Transfer-Encoding").empty;
@@ -150,10 +183,16 @@ final:
 			disconnect();
 		}
 
-		if (hasBody)
+		auto length = getHeader("Content-Length");
+
+		if (!length.empty)
 		{
-			auto length = getHeader("Content-Length");
-			if (!length.empty)
+			if (chunked)
+			{
+				// TODO: case insensitive
+				headers.remove("Content-Length");
+			}
+			else if (hasBody)
 			{
 				socket.readlen(overflow, body_, to!size_t(length));
 			}
@@ -168,5 +207,16 @@ final:
 		}
 
 		return headers.byKeyValue.map!(x => x.key ~ ": " ~ x.value).join("\r\n");
+	}
+
+	Generator!(ubyte[]) getChunks()
+	{
+		enforce(isChunked, "getChunks() called on response with no chunked data.");
+
+		return new Generator!(ubyte[])(
+		{
+			// readChunk yields the buffer whenever possible
+			body_ = socket.readChunk(overflow);
+		});
 	}
 }

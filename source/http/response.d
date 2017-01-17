@@ -4,7 +4,6 @@ import core.time;
 
 import std.algorithm;
 import std.array;
-import std.concurrency;
 import std.conv;
 import std.exception;
 import std.range;
@@ -15,11 +14,29 @@ import http.instance;
 import http.common;
 import http.enums;
 
-void badRequest(Socket socket)
+nothrow void sendResponse(ref Socket socket, int statusCode, string statusPhrase = null)
 {
-	auto response = new HttpResponse(socket);
-	response.statusCode = HttpStatus.badRequest;
-	response.send();
+	try
+	{
+		auto request = new HttpResponse(socket, statusCode, statusPhrase);
+		request.send();
+	}
+	catch (Throwable)
+	{
+		// ignored
+	}
+}
+
+// Shorthand for sendResponse
+nothrow void sendBadRequest(ref Socket socket)
+{
+	socket.sendResponse(HttpStatus.badRequest);
+}
+
+// Shorthand for sendResponse
+nothrow void sendNotFound(ref Socket socket)
+{
+	socket.sendResponse(HttpStatus.notFound);
 }
 
 class HttpResponse : HttpInstance
@@ -54,33 +71,6 @@ public:
 	void run()
 	{
 		throw new Exception("Not implemented");
-	}
-
-	void send(Socket s)
-	{
-		auto str = toString();
-
-		if (hasBody && body_.empty)
-		{
-			s.send(str);
-
-			if (isChunked)
-			{
-				foreach (buffer; getChunks())
-				{
-					s.send(buffer);
-				}
-			}
-		}
-		else
-		{
-			s.send(cast(ubyte[])str ~ body_);
-		}
-	}
-
-	void send()
-	{
-		send(socket);
 	}
 
 	override string toString()
@@ -130,18 +120,6 @@ public:
 		super.parseHeaders();
 		debug import std.stdio;
 		debug synchronized stderr.writeln(toString());
-		debug synchronized stderr.writeln();
 		return true;
-	}
-
-	Generator!(ubyte[]) getChunks()
-	{
-		enforce(isChunked, "getChunks() called on response with no chunked data.");
-
-		return new Generator!(ubyte[])(
-		{
-			// readChunk yields the buffer whenever possible
-			body_ = socket.readChunk(overflow);
-		});
 	}
 }
