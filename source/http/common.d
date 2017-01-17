@@ -9,8 +9,9 @@ import std.conv;
 import std.exception;
 import std.string;
 import std.range;
+import std.concurrency;
 
-public import http.enums;
+import http.enums;
 
 // TODO: interface (run, connected, etc)
 // TODO: outbound socket pool
@@ -179,7 +180,6 @@ public import http.enums;
 @trusted ubyte[] readChunk(Socket socket, ref Appender!(char[]) overflow)
 {
 	// TODO: fix invalid utf sequence (string auto decoding sucks!)
-	// TODO: send chunks as they're received
 	Appender!(char[]) result;
 
 	for (char[] line; !(line = socket.readln(overflow)).empty;)
@@ -198,15 +198,19 @@ public import http.enums;
 		{
 			break;
 		}
+
+		yield(cast(ubyte[])(line ~ "\r\n") ~ buffer);
 	}
 
 	// TODO: check if this even works! (reads trailers (headers))
 	for (char[] line; !(line = socket.readln(overflow)).empty;)
 	{
 		result.writeln(line);
+		yield(cast(ubyte[])(line ~ "\r\n"));
 	}
 
 	result.writeln();
+	yield(cast(ubyte[])"\r\n");
 
 	return cast(ubyte[])result.data;
 }
@@ -226,78 +230,4 @@ public import http.enums;
 	Appender!string builder;
 	builder.writeln(args);
 	socket.send(builder.data);
-}
-
-// TODO: move to separate module:
-
-interface IHttpInstance
-{
-	bool connected();
-	void disconnect();
-	string getHeader(in string key);
-	void run();
-	void receive();
-	void send(Socket s);
-	void send();
-	void clear();
-}
-
-abstract class HttpInstance : IHttpInstance
-{
-protected:
-	Socket socket;
-	Appender!(char[]) overflow;
-	HttpVersion version_;
-	string[string] headers;
-	ubyte[] body_;
-
-public:
-	this(Socket socket, lazy Duration timeout = 15.seconds)
-	{
-		enforce(socket.isAlive, "socket must be connected!");
-
-		this.socket = socket;
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
-		this.socket.blocking = true;
-	}
-
-	final bool connected()
-	{
-		return socket.isAlive();
-	}
-
-	void disconnect()
-	{
-		socket.disconnect();
-		clear();
-	}
-
-	final string getHeader(in string key)
-	{
-		import std.uni : sicmp;
-
-		auto ptr = key in headers;
-		if (ptr !is null)
-		{
-			return *ptr;
-		}
-
-		auto search = headers.byPair.find!(x => !sicmp(key, x[0]));
-
-		if (!search.empty)
-		{
-			return takeOne(search).front[1];
-		}
-
-		return null;
-	}
-
-	void clear()
-	{
-		overflow.clear();
-		version_ = HttpVersion.v1_1;
-		headers  = null;
-		body_    = null;
-	}
 }

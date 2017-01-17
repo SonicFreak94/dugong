@@ -21,7 +21,7 @@ int main(string[] argv)
 	listener.listen(1);
 
 	auto socketSet = new SocketSet();
-	debug auto queue = new ThreadQueue(1); // lol
+	debug auto queue = new ThreadQueue(1000); // lol
 	else  auto queue = new ThreadQueue();
 
 	while (listener.isAlive)

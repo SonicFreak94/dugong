@@ -6,6 +6,7 @@ import core.time;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.concurrency;
 import std.exception;
 import std.range;
 import std.string;
@@ -60,16 +61,19 @@ public:
 						continue;
 
 					case get:
-						receive();
+						if (!receive())
+						{
+							continue;
+						}
 						break;
 
 					default:
 						throw new Exception("Unsupported method for persistent connections: " ~ method.toString());
 				}
 			}
-			else
+			else if (!receive())
 			{
-				receive();
+				continue;
 			}
 
 			if (!connected())
@@ -155,7 +159,7 @@ public:
 
 					send(remote);
 					auto r = new HttpResponse(remote);
-					r.run();
+					r.receive();
 					r.send(socket);
 					break;
 
@@ -196,13 +200,14 @@ public:
 		return result.data;
 	}
 
-	void receive()
+	bool receive()
 	{
 		auto line = socket.readln(overflow);
 
 		if (line.empty)
 		{
-			return;
+			yield();
+			return false;
 		}
 
 		auto elements = line.split();
@@ -231,12 +236,12 @@ public:
 
 		auto length_str = getHeader("Content-Length");
 
-		if (length_str.empty)
+		if (!length_str.empty)
 		{
-			return;
+			body_ = socket.readlen(overflow, to!size_t(length_str));
 		}
 
-		body_ = socket.readlen(overflow, to!size_t(length_str));
+		return true;
 	}
 
 private:

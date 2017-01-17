@@ -9,7 +9,9 @@ import std.conv;
 import std.exception;
 import std.uni : sicmp;
 import std.range;
+import std.concurrency;
 
+import http.instance;
 import http.common;
 import http.enums;
 
@@ -44,13 +46,31 @@ public:
 
 	void run()
 	{
-		receive();
+		throw new Exception("Not implemented");
 	}
 
 	void send(Socket s)
 	{
 		auto str = toString();
-		s.send(cast(ubyte[])str ~ body_);
+
+		if (body_.empty)
+		{
+			s.send(str);
+
+			auto transferEncoding = getHeader("Transfer-Encoding");
+
+			if (!transferEncoding.empty)
+			{
+				foreach (buffer; getChunks())
+				{
+					s.send(buffer);
+				}
+			}
+		}
+		else
+		{
+			s.send(cast(ubyte[])str ~ body_);
+		}
 	}
 
 	void send()
@@ -63,9 +83,9 @@ public:
 		Appender!string result;
 
 		result.writeln(version_.toString(),
-					   ' ', to!string(statusCode),
-					   ' ', statusPhrase.empty ? (cast(HttpStatus)statusCode).toString() : statusPhrase
-					);
+			' ', to!string(statusCode),
+			' ', statusPhrase.empty ? (cast(HttpStatus)statusCode).toString() : statusPhrase
+		);
 
 		if (headers.length)
 		{
@@ -76,13 +96,13 @@ public:
 		return result.data;
 	}
 
-	void receive()
+	bool receive()
 	{
 		auto line = socket.readln(overflow);
 
 		if (line.empty)
 		{
-			return;
+			return false;
 		}
 
 		auto _httpVersion = line.munch("^ ");
@@ -106,13 +126,19 @@ public:
 		if (!length.empty)
 		{
 			body_ = socket.readlen(overflow, to!size_t(length));
-			return;
 		}
 
-		auto transferEncoding = getHeader("Transfer-Encoding");
-		if (!transferEncoding.empty)
+		return true;
+	}
+
+	Generator!(ubyte[]) getChunks()
+	{
+		enforce(!getHeader("Transfer-Encoding").empty, "getChunks() called on response with no chunked data.");
+
+		return new Generator!(ubyte[])(
 		{
+			// readChunk yields the buffer whenever possible
 			body_ = socket.readChunk(overflow);
-		}
+		});
 	}
 }
