@@ -21,7 +21,6 @@ interface IHttpInstance
 {
 	bool connected();
 	void disconnect();
-	string getHeader(in string key);
 	void run();
 	bool receive();
 	void send(Socket s);
@@ -112,7 +111,7 @@ final:
 		return socket !is null && socket.isAlive;
 	}
 
-	string getHeader(in string key)
+	string getHeader(in string key, string* realKey = null)
 	{
 		import std.uni : sicmp;
 
@@ -126,7 +125,14 @@ final:
 
 		if (!search.empty)
 		{
-			return takeOne(search).front[1];
+			auto result = takeOne(search);
+
+			if (realKey !is null)
+			{
+				*realKey = result.front[0];
+			}
+
+			return result.front[1];
 		}
 
 		return null;
@@ -149,7 +155,21 @@ final:
 			headers[key] = header.idup;
 		}
 
+		string key;
+		auto contentLength = getHeader("Content-Length", &key);
 		chunked = !getHeader("Transfer-Encoding").empty;
+
+		if (!contentLength.empty)
+		{
+			if (chunked)
+			{
+				enforce(headers.remove(key));
+			}
+			else if (hasBody)
+			{
+				socket.readlen(overflow, body_, to!size_t(contentLength));
+			}
+		}
 
 		auto connection = getHeader("Connection");
 		if (connection.empty)
@@ -181,21 +201,6 @@ final:
 		if (!socket.isAlive)
 		{
 			disconnect();
-		}
-
-		auto length = getHeader("Content-Length");
-
-		if (!length.empty)
-		{
-			if (chunked)
-			{
-				// TODO: case insensitive
-				headers.remove("Content-Length");
-			}
-			else if (hasBody)
-			{
-				socket.readlen(overflow, body_, to!size_t(length));
-			}
 		}
 	}
 
