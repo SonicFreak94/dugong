@@ -43,10 +43,20 @@ public:
 
 	bool handlePersistence()
 	{
+		scope (exit)
+		{
+			yield();
+		}
+
 		if (method == HttpMethod.connect)
 		{
-			handleConnect();
-			return false;
+			if (checkRemote())
+			{
+				handleConnect();
+				return false;
+			}
+
+			return true;
 		}
 
 		clear();
@@ -72,13 +82,11 @@ public:
 			{
 				if (!handlePersistence())
 				{
-					yield();
 					continue;
 				}
 			}
 			else if (!receive())
 			{
-				yield();
 				continue;
 			}
 
@@ -93,6 +101,7 @@ public:
 			switch (method) with (HttpMethod)
 			{
 				case none:
+					// just send a bad request and close the connection.
 					socket.sendBadRequest();
 					return;
 
@@ -125,7 +134,7 @@ public:
 					{
 						try
 						{
-							remote = new TcpSocket(new InternetAddress(address, port));
+							remote = new HttpSocket(address, port);
 						}
 						catch (Throwable)
 						{
@@ -161,6 +170,8 @@ public:
 			{
 				break;
 			}
+
+			yield();
 		}
 	}
 
@@ -186,13 +197,13 @@ public:
 
 		if (!socket.readln(overflow, line) && line.empty)
 		{
-			import std.stdio;
 			disconnect();
 			return false;
 		}
 
 		if (line.empty)
 		{
+			yield();
 			return false;
 		}
 
@@ -228,8 +239,11 @@ private:
 			response = null;
 		}
 
-		remote.disconnect();
-		remote = null;
+		if (remote !is null)
+		{
+			remote.disconnect();
+			remote = null;
+		}
 
 		yield();
 	}
@@ -256,8 +270,7 @@ private:
 			try
 			{
 				auto address = requestUrl.split(':');
-				auto remoteAddr = new InternetAddress(address[0], to!ushort(address[1]));
-				remote = new TcpSocket(remoteAddr);
+				remote = new HttpSocket(address[0], to!ushort(address[1]));
 				enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
 			}
 			catch (Exception ex)
@@ -296,7 +309,7 @@ private:
 
 		if (length == Socket.ERROR)
 		{
-			return true;
+			return wouldHaveBlocked();
 		}
 
 		to.send(buffer[0 .. length]);
@@ -305,56 +318,37 @@ private:
 
 	void connectProxy()
 	{
-		auto errors = new SocketSet();
-		auto reads  = new SocketSet();
-
 		while (socket.isAlive && checkRemote())
 		{
-			errors.add(remote);
-			errors.add(socket);
-			reads.add(remote);
-			reads.add(socket);
+			int count;
 
-			if (Socket.select(reads, null, errors, 5.seconds) <= 0)
+			if (forward(remote, socket))
 			{
-				disconnect();
+				++count;
+			}
+			else
+			{
+				closeRemote();
+				yield();
 				break;
 			}
 
-			if (errors.isSet(socket))
-			{
-				throw new Exception(socket.getErrorText());
-			}
-			else if (errors.isSet(remote))
-			{
-				throw new Exception(remote.getErrorText());
-			}
+			yield();
 
-			int count;
-
-			if (reads.isSet(remote) && forward(remote, socket))
+			if (forward(socket, remote))
 			{
 				++count;
 			}
-			else
-			{
-				yield();
-			}
 
-			if (reads.isSet(socket) && forward(socket, remote))
-			{
-				++count;
-			}
-			else
-			{
-				yield();
-			}
+			yield();
 
 			if (!count)
 			{
 				closeRemote();
 				break;
 			}
+
+			yield();
 		}
 	}
 }

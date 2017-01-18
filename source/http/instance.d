@@ -53,7 +53,7 @@ public:
 		this.hasBody_ = hasBody;
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
 		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
-		this.socket.blocking = true;
+		this.socket.blocking = false;
 	}
 
 	void disconnect()
