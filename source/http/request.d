@@ -128,9 +128,9 @@ public:
 						}
 						catch (Throwable)
 						{
-							remote = null;
 							clear();
 							socket.sendNotFound();
+							closeRemote();
 							break;
 						}
 					}
@@ -260,12 +260,11 @@ private:
 			}
 			catch (Exception ex)
 			{
-				remote = null;
-
 				try
 				{
 					clear();
 					socket.sendNotFound();
+					closeRemote();
 				}
 				catch (Throwable)
 				{
@@ -316,7 +315,7 @@ private:
 
 			if (Socket.select(reads, null, errors, 5.seconds) <= 0)
 			{
-				closeRemote();
+				disconnect();
 				break;
 			}
 

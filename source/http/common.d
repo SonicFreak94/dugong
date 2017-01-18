@@ -158,14 +158,13 @@ const enum HTTP_BREAK = "\r\n";
 	char[1024] buffer;
 	ptrdiff_t rlength = -1;
 
-	auto a = overflow.data[0 .. min($, target)].dup;
-	result.put(a);
+	result.put(overflow.data[0 .. min($, target)]);
 
 	if (target < overflow.data.length)
 	{
-		auto b = overflow.data[target .. $].dup;
+		auto arr = overflow.data[target .. $];
 		overflow.clear();
-		overflow.put(b);
+		overflow.put(arr);
 	}
 	else
 	{

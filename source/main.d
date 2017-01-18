@@ -46,6 +46,7 @@ int main(string[] argv)
 		Thread.sleep(1.msecs);
 	}
 
+	queue.join();
 	listener.disconnect();
 	return 0;
 }

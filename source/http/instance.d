@@ -190,8 +190,7 @@ final:
 			default:
 				if (socket.isAlive)
 				{
-					auto r = new HttpResponse(socket, HttpStatus.httpVersionNotSupported);
-					r.send();
+					socket.sendResponse(HttpStatus.httpVersionNotSupported);
 				}
 
 				disconnect();

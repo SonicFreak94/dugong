@@ -28,6 +28,20 @@ public:
 		queue.insertBack(t);
 	}
 
+	void join()
+	{
+		foreach (i, ref Thread t; running)
+		{
+			if (t is null)
+			{
+				continue;
+			}
+
+			join(i, t);
+			decrement();
+		}
+	}
+
 	void run()
 	{
 		foreach (i, ref Thread t; running)
@@ -39,18 +53,8 @@ public:
 					continue;
 				}
 
-				try
-				{
-					// Re-throw any available exceptions
-					t.join(true);
-				}
-				catch (Exception ex)
-				{
-					stderr.writefln("[%d] %s", i, ex.msg);
-				}
-
-				t = null;
-				stderr.writeln("threads: ", --instances);
+				join(i, t);
+				decrement();
 			}
 
 			if (queue.empty)
@@ -62,7 +66,38 @@ public:
 			queue.removeFront();
 			t.start();
 
-			stderr.writeln("threads: ", ++instances);
+			increment();
 		}
+	}
+
+private:
+	private void join(size_t i, ref Thread t)
+	{
+		if (t is null)
+		{
+			return;
+		}
+
+		try
+		{
+			// Re-throw any available exceptions
+			t.join(true);
+		}
+		catch (Exception ex)
+		{
+			stderr.writefln("[%d] %s", i, ex.msg);
+		}
+
+		t = null;
+	}
+
+	private void increment()
+	{
+		stderr.writeln("threads: ", ++instances);
+	}
+
+	private void decrement()
+	{
+		stderr.writeln("threads: ", --instances);
 	}
 }
