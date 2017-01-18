@@ -15,8 +15,8 @@ import http.request;
 
 pragma(inline) void wait()
 {
-	Thread.sleep(1.msecs);
 	yield();
+	Thread.sleep(1.msecs);
 }
 
 class FiberQueue
@@ -85,17 +85,20 @@ private:
 
 		while (!empty)
 		{
-			synchronized (mtx_requests)
+			while (!mtx_requests.tryLock())
 			{
-				auto search = requests[].find!(x => !x.connected);
-
-				if (!search.empty)
-				{
-					requests.linearRemove(take(search, 1));
-					decrement();
-				}
+				wait();
 			}
 
+			auto search = requests[].find!(x => !x.connected);
+
+			if (!search.empty)
+			{
+				requests.linearRemove(take(search, 1));
+				decrement();
+			}
+
+			mtx_requests.unlock();
 			wait();
 		}
 	}

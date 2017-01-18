@@ -41,7 +41,7 @@ public:
 		closeRemote();
 	}
 
-	bool handleConnection()
+	bool handlePersistence()
 	{
 		if (method == HttpMethod.connect)
 		{
@@ -66,11 +66,11 @@ public:
 			disconnect();
 		}
 
-		while (connected())
+		while (connected)
 		{
 			if (established)
 			{
-				if (!handleConnection())
+				if (!handlePersistence())
 				{
 					yield();
 					continue;
@@ -82,7 +82,7 @@ public:
 				continue;
 			}
 
-			if (!connected())
+			if (!connected)
 			{
 				break;
 			}
@@ -144,7 +144,7 @@ public:
 
 					if (checkRemote() && !response.isPersistent)
 					{
-						response.disconnect();
+						closeRemote();
 					}
 					break;
 
@@ -233,7 +233,6 @@ private:
 
 		yield();
 	}
-
 	bool checkRemote()
 	{
 		if (remote is null)
