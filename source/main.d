@@ -25,7 +25,8 @@ int main(string[] argv)
 	stdout.writeln("Listening on port ", proxyPort);
 
 	auto socketSet = new SocketSet();
-	auto queue = new RequestQueue();
+	debug auto queue = new RequestQueue(1);
+	else  auto queue = new RequestQueue();
 	size_t count;
 
 	while (listener.isAlive)

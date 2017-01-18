@@ -70,12 +70,44 @@ const enum HTTP_BREAK = "\r\n";
 	}
 }
 
+// tries to receive as if the socket was blocking, but yields
+// until either data is available or the connection times out.
+// TODO: fix
+ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
+{
+	ptrdiff_t length = -1;
+
+	auto start = MonoTime.currTime;
+	Duration timeout;
+	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+
+	do
+	{
+		length = socket.receive(buffer);
+
+		if (length == Socket.ERROR)
+		{
+			yield();
+
+			if (!wouldHaveBlocked())
+			{
+				break;
+			}
+
+			continue;
+		}
+	} while (length <= 0 && MonoTime.currTime - start < timeout);
+
+	return length;
+}
+
 ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
+	enforce(!socket.blocking, "socket must not be blocking");
 	Appender!(char[]) result;
 	char[1024] buffer;
 	ptrdiff_t index = -1;
-	ptrdiff_t rlength = -1;
+	ptrdiff_t length = -1;
 
 	if (!socket.isAlive)
 	{
@@ -98,21 +130,13 @@ ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] o
 	{
 		while (index < 0 && socket.isAlive)
 		{
-			auto length = socket.receive(buffer);
-			rlength = max(0, length);
+			length = socket.receiveYield(buffer);
 
-			if (!length)
+			if (!length || length == Socket.ERROR)
 			{
 				// maybe send?
 				overflow.clear();
-				socket.disconnect();
 				break;
-			}
-
-			if (length == Socket.ERROR)
-			{
-				yield();
-				continue;
 			}
 
 			index = buffer.indexOf(HTTP_BREAK);
@@ -142,7 +166,7 @@ ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] o
 
 	if (str.empty)
 	{
-		return rlength;
+		return length;
 	}
 
 	enforce(str.endsWith(HTTP_BREAK),   `Parse failed: output does not end with line break.`);
@@ -157,7 +181,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
-	ptrdiff_t rlength = -1;
+	ptrdiff_t length = -1;
 
 	result.put(overflow.data[0 .. min($, target)]);
 
@@ -175,21 +199,13 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 
 	while (result.data.length < target && socket.isAlive)
 	{
-		auto length = socket.receive(buffer);
-		rlength = length;
+		length = socket.receiveYield(buffer);
 
-		if (!length)
+		if (!length || length == Socket.ERROR)
 		{
 			// maybe send?
 			overflow.clear();
-			socket.disconnect();
 			break;
-		}
-
-		if (length == Socket.ERROR)
-		{
-			yield();
-			continue;
 		}
 
 		auto remainder = target - result.data.length;
@@ -202,14 +218,15 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	}
 
 	output = result.data.empty ? null : cast(ubyte[])result.data;
-	return rlength;
+	return length;
 }
 
-@trusted ubyte[] readChunk(ref Socket socket, ref Appender!(char[]) overflow)
+@trusted ptrdiff_t readChunk(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] data)
 {
 	Appender!(char[]) result;
+	ptrdiff_t rlength;
 
-	for (char[] line; socket.readln(overflow, line);)
+	for (char[] line; (rlength = socket.readln(overflow, line)) > 0;)
 	{
 		if (line.empty)
 		{
@@ -234,14 +251,15 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	if (!overflow.data.empty)
 	{
 		// TODO: check if this even works! (reads trailers (headers))
-		for (char[] line; socket.readln(overflow, line);)
+		for (char[] line; (rlength = socket.readln(overflow, line)) > 0;)
 		{
 			result.writeln(line);
 			yield(cast(ubyte[])(line ~ HTTP_BREAK)); // trusted
 		}
 	}
 
-	return cast(ubyte[])result.data;
+	data = (cast(ubyte[])result.data).dup;
+	return rlength;
 }
 
 @safe void writeln(T, A...)(ref Appender!T output, A args)

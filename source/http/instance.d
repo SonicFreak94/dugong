@@ -140,7 +140,7 @@ final:
 	void parseHeaders()
 	{
 		ptrdiff_t rlength = -1;
-		for (char[] header; socket.readln(overflow, header) && !header.empty;)
+		for (char[] header; (rlength = socket.readln(overflow, header)) > 0 && !header.empty;)
 		{
 			auto key = header.munch("^:").idup;
 			header.munch(": ");
@@ -166,7 +166,7 @@ final:
 			}
 			else if (hasBody)
 			{
-				socket.readlen(overflow, body_, to!size_t(contentLength));
+				rlength = socket.readlen(overflow, body_, to!size_t(contentLength));
 			}
 		}
 
@@ -196,7 +196,7 @@ final:
 				return;
 		}
 
-		if (!socket.isAlive)
+		if (!rlength)
 		{
 			disconnect();
 		}
@@ -219,7 +219,10 @@ final:
 		return new Generator!(ubyte[])(
 		{
 			// readChunk yields the buffer whenever possible
-			body_ = socket.readChunk(overflow);
+			if (!socket.readChunk(overflow, body_))
+			{
+				disconnect();
+			}
 		});
 	}
 }

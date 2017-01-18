@@ -59,7 +59,18 @@ public:
 			return true;
 		}
 
+		auto currHost = getHeader("Host");
 		clear();
+
+		scope (exit)
+		{
+			auto newHost = getHeader("Host");
+
+			if (newHost != currHost)
+			{
+				closeRemote();
+			}
+		}
 
 		if (!receive() || !checkRemote())
 		{
@@ -108,6 +119,9 @@ public:
 				case connect:
 					handleConnect();
 					break;
+
+					// TODO: POST
+					// TODO: OPTIONS
 
 				case get:
 				case head:
@@ -296,59 +310,81 @@ private:
 		connectProxy();
 	}
 
-	bool forward(Socket from, Socket to)
+	auto forward(Socket from, Socket to)
 	{
+		if (from is null || !from.isAlive)
+		{
+			return 0;
+		}
+
+		if (to is null || !to.isAlive)
+		{
+			return 0;
+		}
+
 		ubyte[1024] buffer;
-		auto length = from.receive(buffer);
 
-		if (!length)
+		ptrdiff_t result, length;
+
+		length = from.receive(buffer);
+		result = length;
+
+		if (length > 0)
 		{
-			from.disconnect();
-			return false;
+			to.send(buffer[0 .. length]);
 		}
 
-		if (length == Socket.ERROR)
+		while (length == buffer.length)
 		{
-			return wouldHaveBlocked();
+			length = from.receive(buffer);
+
+			if (length < 1)
+			{
+				break;
+			}
+
+			if (length > 0)
+			{
+				to.send(buffer[0 .. length]);
+				result += length;
+			}
 		}
 
-		to.send(buffer[0 .. length]);
-		return true;
+		yield();
+
+		return result;
 	}
 
 	void connectProxy()
 	{
-		while (socket.isAlive && checkRemote())
+		if (!socket.isAlive || !checkRemote())
 		{
-			int count;
-
-			if (forward(remote, socket))
-			{
-				++count;
-			}
-			else
-			{
-				closeRemote();
-				yield();
-				break;
-			}
-
-			yield();
-
-			if (forward(socket, remote))
-			{
-				++count;
-			}
-
-			yield();
-
-			if (!count)
-			{
-				closeRemote();
-				break;
-			}
-
-			yield();
+			return;
 		}
+
+		auto sch = new FiberScheduler();
+		sch.spawn(
+		{
+			while (forward(remote, socket))
+			{
+				yield();
+			}
+
+			closeRemote();
+		});
+
+		sch.start(
+		{
+			while (checkRemote())
+			{
+				if (!forward(socket, remote))
+				{
+					disconnect();
+					break;
+				}
+
+				yield();
+			}
+		});
 	}
 }
