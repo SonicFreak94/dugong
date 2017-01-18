@@ -4,6 +4,7 @@ import core.thread;
 import core.time;
 
 import std.array;
+import std.concurrency;
 import std.conv;
 import std.exception;
 import std.string;
@@ -71,13 +72,13 @@ public:
 			{
 				if (!handleConnection())
 				{
+					yield();
 					continue;
 				}
 			}
 			else if (!receive())
 			{
-				// TODO: when concurrency happens, yield
-				Thread.sleep(1.msecs);
+				yield();
 				continue;
 			}
 
@@ -229,6 +230,8 @@ private:
 
 		remote.disconnect();
 		remote = null;
+
+		yield();
 	}
 
 	bool checkRemote()
@@ -334,9 +337,18 @@ private:
 			{
 				++count;
 			}
+			else
+			{
+				yield();
+			}
+
 			if (reads.isSet(socket) && forward(socket, remote))
 			{
 				++count;
+			}
+			else
+			{
+				yield();
 			}
 
 			if (!count)

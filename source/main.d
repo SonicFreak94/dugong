@@ -9,7 +9,7 @@ import std.socket;
 import std.stdio;
 
 import http;
-import threadqueue;
+import requestqueue;
 
 ushort proxyPort = 3128;
 
@@ -21,8 +21,7 @@ int main(string[] argv)
 	listener.listen(1);
 
 	auto socketSet = new SocketSet();
-	debug auto queue = new ThreadQueue(1000); // lol
-	else  auto queue = new ThreadQueue();
+	auto queue = new RequestQueue();
 
 	while (listener.isAlive)
 	{
@@ -33,8 +32,7 @@ int main(string[] argv)
 
 			if (socketSet.isSet(listener))
 			{
-				auto instance = new HttpRequest(listener.accept());
-				queue.add(new Thread(&instance.run));
+				queue.add(new HttpRequest(listener.accept()));
 			}
 		}
 		catch (Exception ex)
