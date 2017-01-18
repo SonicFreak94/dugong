@@ -70,7 +70,7 @@ const enum HTTP_BREAK = "\r\n";
 	}
 }
 
-@safe ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
+ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
 	enforce(socket.blocking, "socket must be blocking");
 
@@ -95,11 +95,24 @@ const enum HTTP_BREAK = "\r\n";
 	overflow.clear();
 
 	auto str = result.overflow(overflow);
+	auto set = new SocketSet();
 
 	if (str.empty)
 	{
 		while (index < 0 && socket.isAlive)
 		{
+			set.add(socket);
+			// I know this basically defeats the purpose of
+			// blocking sockets, but it's much more reliable
+			// than checking "receive" return values.
+			Socket.select(set, null, null, 1.msecs);
+
+			if (!set.isSet(socket))
+			{
+				yield();
+				continue;
+			}
+
 			auto length = socket.receive(buffer);
 			rlength = max(0, length);
 
@@ -152,7 +165,7 @@ const enum HTTP_BREAK = "\r\n";
 	return output.length;
 }
 
-@safe ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
+ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
@@ -172,8 +185,22 @@ const enum HTTP_BREAK = "\r\n";
 		overflow.clear();
 	}
 
+	auto set = new SocketSet();
+
 	while (result.data.length < target && socket.isAlive)
 	{
+		set.add(socket);
+		// I know this basically defeats the purpose of
+		// blocking sockets, but it's much more reliable
+		// than checking "receive" return values.
+		Socket.select(set, null, null, 1.msecs);
+
+		if (!set.isSet(socket))
+		{
+			yield();
+			continue;
+		}
+
 		auto length = socket.receive(buffer);
 		rlength = length;
 
