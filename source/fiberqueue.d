@@ -24,7 +24,7 @@ class FiberQueue
 private:
 	FiberScheduler fibers;
 	const size_t capacity_;
-	size_t count;
+	size_t count_;
 	DList!HttpRequest requests;
 	Mutex mtx_requests;
 
@@ -36,12 +36,14 @@ public:
 		mtx_requests  = new Mutex();
 	}
 
-	@property auto capacity() { return capacity_; }
+	@property size_t capacity() { return capacity_; }
 
 	@property bool canAdd()
 	{
-		synchronized (this) return count < capacity;
+		synchronized (this) return count_ < capacity;
 	}
+
+	@property size_t count() { synchronized (this) return count_; }
 
 	void add(HttpRequest r)
 	{
@@ -63,15 +65,15 @@ public:
 private:
 	void increment()
 	{
-		synchronized (this) ++count;
+		synchronized (this) ++count_;
 	}
 	void decrement()
 	{
-		synchronized (this) --count;
+		synchronized (this) --count_;
 	}
 	@property bool empty()
 	{
-		synchronized (this) return !count;
+		synchronized (this) return !count_;
 	}
 
 	void prune()

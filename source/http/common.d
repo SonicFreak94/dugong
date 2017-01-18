@@ -162,7 +162,8 @@ const enum HTTP_BREAK = "\r\n";
 
 	if (target < overflow.data.length)
 	{
-		auto arr = overflow.data[target .. $];
+		// .dup prevents a crash related to overlapping
+		auto arr = overflow.data[target .. $].dup;
 		overflow.clear();
 		overflow.put(arr);
 	}

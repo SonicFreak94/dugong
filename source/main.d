@@ -15,13 +15,18 @@ ushort proxyPort = 3128;
 
 int main(string[] argv)
 {
+	stdout.writeln("Started. Opening socket...");
+
 	Socket listener = new TcpSocket();
 	listener.bind(new InternetAddress(proxyPort));
 	listener.blocking = false;
 	listener.listen(1);
 
+	stdout.writeln("Listening on port ", proxyPort);
+
 	auto socketSet = new SocketSet();
 	auto queue = new RequestQueue();
+	size_t count;
 
 	while (listener.isAlive)
 	{
@@ -40,7 +45,13 @@ int main(string[] argv)
 			stderr.writeln(ex.msg);
 		}
 
-		queue.run();
+		auto current = queue.runningThreads;
+		if (current != count)
+		{
+			stdout.writeln("threads: ", current);
+			count = current;
+		}
+
 		Thread.sleep(1.msecs);
 	}
 
