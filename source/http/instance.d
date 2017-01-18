@@ -105,8 +105,7 @@ final:
 	@property bool isPersistent() { return persistent; }
 	@property bool hasBody() { return hasBody_; }
 	@property bool isChunked() { return chunked; }
-
-	bool connected()
+	@property bool connected()
 	{
 		return socket !is null && socket.isAlive;
 	}
