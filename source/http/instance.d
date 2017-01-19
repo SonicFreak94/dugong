@@ -70,7 +70,6 @@ public:
 	{
 		socket.disconnect();
 		socket = null;
-		clear();
 	}
 
 	void clear()
