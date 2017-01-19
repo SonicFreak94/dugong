@@ -72,7 +72,6 @@ const enum HTTP_BREAK = "\r\n";
 
 // tries to receive as if the socket was blocking, but yields
 // until either data is available or the connection times out.
-// TODO: fix
 ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 {
 	ptrdiff_t length = -1;
@@ -87,13 +86,12 @@ ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 
 		if (length == Socket.ERROR)
 		{
-			yield();
-
 			if (!wouldHaveBlocked())
 			{
-				break;
+				return 0;
 			}
 
+			yield();
 			continue;
 		}
 	} while (length <= 0 && MonoTime.currTime - start < timeout);

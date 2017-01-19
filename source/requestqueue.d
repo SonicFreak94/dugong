@@ -16,8 +16,8 @@ class FiberThread : Thread
 public:
 	this()
 	{
-		debug queue = new FiberQueue(1);
-		else  queue = new FiberQueue();
+		/*debug queue = new FiberQueue(1);
+		else  */queue = new FiberQueue();
 		super(&queue.run);
 	}
 
@@ -52,11 +52,9 @@ public:
 		// dirty load balancing hack
 		auto t = threads.minElement!(x => x.queue.count);
 
-		synchronized stdout.writeln("connection count: ", t.queue.count);
-
 		while (!t.queue.canAdd)
 		{
-			Thread.sleep(1.seconds);
+			Thread.sleep(1.msecs);
 		}
 
 		t.queue.add(r);

@@ -326,7 +326,7 @@ private:
 
 		ptrdiff_t result, length;
 
-		length = from.receive(buffer);
+		length = from.receiveYield(buffer);
 		result = length;
 
 		if (length > 0)
@@ -336,7 +336,7 @@ private:
 
 		while (length == buffer.length)
 		{
-			length = from.receive(buffer);
+			length = from.receiveYield(buffer);
 
 			if (length < 1)
 			{
@@ -349,8 +349,6 @@ private:
 				result += length;
 			}
 		}
-
-		yield();
 
 		return result;
 	}
@@ -365,8 +363,10 @@ private:
 		auto sch = new FiberScheduler();
 		sch.spawn(
 		{
-			while (forward(remote, socket))
+			ptrdiff_t length;
+			while ((length = forward(remote, socket)) > 0)
 			{
+				Thread.sleep(1.msecs);
 				yield();
 			}
 
@@ -377,13 +377,14 @@ private:
 		{
 			while (checkRemote())
 			{
-				if (!forward(socket, remote))
+				yield();
+
+				ptrdiff_t length;
+				if ((length = forward(socket, remote)) < 1)
 				{
 					disconnect();
 					break;
 				}
-
-				yield();
 			}
 		});
 	}
