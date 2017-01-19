@@ -2,6 +2,7 @@ module http.common;
 
 public import std.socket;
 
+import core.thread;
 import core.time;
 
 import std.algorithm;
@@ -13,6 +14,13 @@ import std.range;
 import std.string;
 
 // TODO: use a range (or even array) instead of appender for overflow buffers
+
+/// Sleeps the thread and then yields.
+pragma(inline) void wait()
+{
+	Thread.sleep(1.msecs);
+	yield();
+}
 
 const enum HTTP_BREAK = "\r\n";
 
@@ -91,7 +99,7 @@ ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 				return 0;
 			}
 
-			yield();
+			wait();
 			continue;
 		}
 	} while (length <= 0 && MonoTime.currTime - start < timeout);

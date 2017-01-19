@@ -12,12 +12,7 @@ import std.array;
 import std.exception;
 
 import http.request;
-
-pragma(inline) void wait()
-{
-	yield();
-	Thread.sleep(1.msecs);
-}
+import http.common : wait;
 
 class FiberQueue
 {

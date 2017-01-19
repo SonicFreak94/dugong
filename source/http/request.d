@@ -45,7 +45,7 @@ public:
 	{
 		scope (exit)
 		{
-			yield();
+			wait();
 		}
 
 		if (method == HttpMethod.connect)
@@ -185,7 +185,7 @@ public:
 				break;
 			}
 
-			yield();
+			wait();
 		}
 	}
 
@@ -217,7 +217,7 @@ public:
 
 		if (line.empty)
 		{
-			yield();
+			wait();
 			return false;
 		}
 
@@ -259,7 +259,7 @@ private:
 			remote = null;
 		}
 
-		yield();
+		//wait();
 	}
 	bool checkRemote()
 	{
@@ -363,11 +363,9 @@ private:
 		auto sch = new FiberScheduler();
 		sch.spawn(
 		{
-			ptrdiff_t length;
-			while ((length = forward(remote, socket)) > 0)
+			while (forward(remote, socket) > 0)
 			{
-				Thread.sleep(1.msecs);
-				yield();
+				wait();
 			}
 
 			closeRemote();
@@ -377,15 +375,16 @@ private:
 		{
 			while (checkRemote())
 			{
-				yield();
+				wait();
 
-				ptrdiff_t length;
-				if ((length = forward(socket, remote)) < 1)
+				if (!forward(socket, remote))
 				{
 					disconnect();
 					break;
 				}
 			}
 		});
+
+		wait();
 	}
 }
