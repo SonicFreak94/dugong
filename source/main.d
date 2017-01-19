@@ -5,20 +5,56 @@ import core.time;
 
 import std.algorithm;
 import std.array;
+import std.getopt;
 import std.socket;
 import std.stdio;
 
 import http;
 import requestqueue;
 
+/// Number of bind retries before giving up.
+ushort bindRetry = 100;
+/// The port to listen on for connections.
 ushort proxyPort = 3128;
 
 int main(string[] argv)
 {
+	try
+	{
+		auto opt = getopt(argv,
+			"p|port", "The port to listen on for connections.", &proxyPort);
+
+		if (opt.helpWanted)
+		{
+			defaultGetoptPrinter("dugong [options]", opt.options);
+			return 0;
+		}
+	}
+	catch (Exception ex)
+	{
+		stdout.writeln(ex.msg);
+		return -1;
+	}
+
 	stdout.writeln("Started. Opening socket...");
 
 	Socket listener = new TcpSocket();
-	listener.bind(new InternetAddress(proxyPort));
+
+	for (ushort i = 0; i < bindRetry; i++)
+	{
+		try
+		{
+			listener.bind(new InternetAddress(proxyPort));
+			break;
+		}
+		catch (Exception ex)
+		{
+			stderr.writeln(ex.msg);
+			stderr.writeln("Retrying...");
+			Thread.sleep(1.seconds);
+		}
+	}
+	
 	listener.blocking = false;
 	listener.listen(1);
 
@@ -46,7 +82,7 @@ int main(string[] argv)
 			stderr.writeln(ex.msg);
 		}
 
-		auto current = queue.runningThreads;
+		auto current = queue.runningThreads();
 		if (current != count)
 		{
 			stdout.writeln("threads: ", current);

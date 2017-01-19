@@ -16,14 +16,19 @@ import std.string;
 // TODO: use a range (or even array) instead of appender for overflow buffers
 
 /// Sleeps the thread and then yields.
-pragma(inline) void wait()
+void wait()
 {
 	Thread.sleep(1.msecs);
 	yield();
 }
 
+/// Represents an HTTP EOL
 const enum HTTP_BREAK = "\r\n";
 
+/// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
+/// Params:
+///		str = An $(D Appender!(char[])) to scan for a line.
+/// Returns: The line if found, else null.
 @safe char[] getln(ref Appender!(char[]) str)
 {
 	if (str.data.empty)
@@ -40,6 +45,9 @@ const enum HTTP_BREAK = "\r\n";
 	return str.data[0 .. index + HTTP_BREAK.length];
 }
 
+/// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
+/// data into the output $(D Appender!(char[])).
+/// Returns: The line if found, else null.
 @safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
@@ -50,7 +58,7 @@ const enum HTTP_BREAK = "\r\n";
 		return null;
 	}
 
-	auto remainder = input.data.length - result.length;
+	const remainder = input.data.length - result.length;
 
 	if (remainder > 0)
 	{
@@ -69,6 +77,7 @@ const enum HTTP_BREAK = "\r\n";
 	return result;
 }
 
+/// Calls $(D shutdown(SocketShutdown.BOTH)) on $(D socket) before closing it.
 @safe void disconnect(ref Socket socket)
 {
 	if (socket !is null)
@@ -78,13 +87,13 @@ const enum HTTP_BREAK = "\r\n";
 	}
 }
 
-// tries to receive as if the socket was blocking, but yields
-// until either data is available or the connection times out.
+/// Same as $(D Socket.receive), but for non-blocking sockets. Calls $(D yield) until 
+/// there is data to be received. The connection will time out just like a blocking socket.
 ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 {
 	ptrdiff_t length = -1;
 
-	auto start = MonoTime.currTime;
+	const start = MonoTime.currTime;
 	Duration timeout;
 	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
 
@@ -107,6 +116,7 @@ ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 	return length;
 }
 
+/// Attemps to read a whole line from a socket.
 ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
 	enforce(!socket.blocking, "socket must not be blocking");
@@ -183,6 +193,7 @@ ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] o
 	return output.length;
 }
 
+/// Attempts to read a specified number of bytes from a socket.
 ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
 {
 	Appender!(char[]) result;
@@ -227,6 +238,9 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	return length;
 }
 
+/// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
+/// Returns: The number of bytes actually received, $(D 0) if the remote side
+/// has closed the connection, or $(D Socket.ERROR) on failure.
 @trusted ptrdiff_t readChunk(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] data)
 {
 	Appender!(char[]) result;
@@ -268,6 +282,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	return rlength;
 }
 
+/// Convenience function for writing lines to Appender
 @safe void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
@@ -277,7 +292,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 
 	output.put(HTTP_BREAK);
 }
-
+/// ditto
 @safe void writeln(A...)(ref Socket socket, A args)
 {
 	Appender!string builder;

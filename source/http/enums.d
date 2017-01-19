@@ -1,5 +1,6 @@
 module http.enums;
 
+/// Defines supported HTTP request methods.
 enum HttpMethod
 {
 	none,
@@ -31,6 +32,7 @@ string toString(HttpMethod method)
 	}
 }
 
+/// Converts from $(D string) to $(D HttpMethod).
 HttpMethod toMethod(const char[] str)
 {
 	switch (str) with (HttpMethod)
@@ -48,6 +50,7 @@ HttpMethod toMethod(const char[] str)
 	}
 }
 
+/// Defines supported HTTP protocol versions.
 enum HttpVersion
 {
 	none,
@@ -65,6 +68,7 @@ string toString(HttpVersion version_)
 	}
 }
 
+/// Converts $(D string) to $(D HttpVersion).
 HttpVersion toVersion(const char[] str)
 {
 	switch (str) with (HttpVersion)
@@ -75,6 +79,7 @@ HttpVersion toVersion(const char[] str)
 	}
 }
 
+/// Defines common HTTP status codes.
 enum HttpStatus : int
 {
 	none                          = 0,
@@ -210,6 +215,7 @@ string toString(HttpStatus status)
 	}
 }
 
+/// Converts from common status phrases to $(D HttpStatus).
 HttpStatus toStatus(const char[] str)
 {
 	switch (str) with (HttpStatus)

@@ -2,6 +2,7 @@ module http.socket;
 
 public import std.socket;
 
+/// Convenience wrapper for TcpSocket
 class HttpSocket : TcpSocket
 {
 public:

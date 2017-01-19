@@ -9,9 +9,7 @@ import std.stdio;
 import http.request;
 import fiberqueue;
 
-// TODO: concurrency per thread
-
-class FiberThread : Thread
+private class FiberThread : Thread
 {
 public:
 	this()
@@ -24,6 +22,7 @@ public:
 	FiberQueue queue;
 }
 
+/// Handles all HTTP connection requests.
 class RequestQueue
 {
 private:
@@ -31,6 +30,9 @@ private:
 	FiberThread[] threads;
 
 public:
+	/// Params:
+	///	threadCount = Number of threads allowed to run.
+	/// Defaults to the system's total CPU threads.'
 	this(size_t threadCount = totalCPUs)
 	{
 		this.threadCount = threadCount;
@@ -42,20 +44,32 @@ public:
 		}
 	}
 
-	@property auto runningThreads()
+	/// Counts the number of running threads.
+	auto runningThreads()
 	{
 		return threads.count!(x => x.isRunning);
 	}
 
+	/// Adds the specified $(D HttpRequest) to the thread with
+	/// the least load.
+	/// If all the threads have reached their maximum connection
+	/// count, the calling thread will be blocked until space is
+	/// available to prevent excessive connections.
+	/// Params:
+	/// 	r = The request to add.
 	void add(HttpRequest r)
 	{
-		// dirty load balancing hack
-		auto t = threads.minElement!(x => x.queue.count);
-
-		while (!t.queue.canAdd)
+		FiberThread t;
+		do
 		{
-			Thread.sleep(1.msecs);
-		}
+			t = threads.minElement!(x => x.queue.count);
+			if (t.queue.canAdd)
+			{
+				break;
+			}
+
+			Thread.sleep(10.msecs);
+		} while (!t.queue.canAdd);
 
 		t.queue.add(r);
 		
@@ -65,6 +79,7 @@ public:
 		}
 	}
 
+	/// Calls $(D Thread.join) on all the threads managed by this instance.
 	void join()
 	{
 		foreach (size_t i, ref FiberThread t; threads)

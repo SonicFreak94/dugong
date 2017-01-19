@@ -14,6 +14,7 @@ import std.exception;
 import http.request;
 import http.common : wait;
 
+/// A concurrent queue of $(D HttpRequest).
 class FiberQueue
 {
 private:
@@ -24,6 +25,9 @@ private:
 	Mutex mtx_requests;
 
 public:
+	/// Params:
+	///		capacity = Number of concurrent connections
+	/// allowed in this instance.
 	this(size_t capacity = 1000)
 	{
 		this.capacity_ = capacity;
@@ -31,15 +35,27 @@ public:
 		mtx_requests  = new Mutex();
 	}
 
-	@property size_t capacity() { return capacity_; }
+	/// The maximum number of concurrent connections allowed
+	/// by this instance.
+	@property size_t capacity() const
+	{
+		return capacity_;
+	}
 
-	@property bool canAdd()
+	/// $(D true) if this instance is below maximum capacity.
+	@property bool canAdd() const
 	{
 		synchronized (this) return count_ < capacity;
 	}
 
-	@property size_t count() { synchronized (this) return count_; }
+	/// Number of requests being handled by this instance.
+	@property size_t count() const
+	{
+		synchronized (this) return count_;
+	}
 
+	/// Adds $(D HttpRequest) to this instance.
+	/// Throws: "Capacity reached" if $(D canAdd) is false.
 	void add(HttpRequest r)
 	{
 		enforce(canAdd, "Capacity reached");
@@ -52,6 +68,7 @@ public:
 		}
 	}
 
+	/// GOTTA GO FAST
 	void run()
 	{
 		fibers.start(&prune);

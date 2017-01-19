@@ -17,17 +17,27 @@ import http.common;
 import http.enums;
 import http.response;
 
+/// Interface for HTTP instances.
 interface IHttpInstance
 {
-	bool connected();
+	/// Returns the connected state of this instance.
+	@property bool connected();
+	/// Disconnects this instance.
 	void disconnect();
+	/// Main parsing routine.
 	void run();
+	/// Main receiving function.
+	/// Returns: $(D true) if data has been received.
 	bool receive();
+	/// Sends the data stored in this instance to the given socket.
 	void send(Socket s);
+	/// Sends the data in this instance to its connected socket.
 	void send();
+	/// Clears the data in this instance.
 	void clear();
 }
 
+/// Base class for $(D HttpRequest) and $(D HttpResponse).
 abstract class HttpInstance : IHttpInstance
 {
 private:
@@ -137,6 +147,8 @@ final:
 		return null;
 	}
 
+	/// Reads available headers from the socket and populates
+	/// $(D headers), performs error handling, maybe more idk.
 	void parseHeaders()
 	{
 		ptrdiff_t rlength = -1;
@@ -202,7 +214,8 @@ final:
 		}
 	}
 
-	string toHeaderString()
+	/// Converts the key-value pairs in $(D headers) to a string.
+	string toHeaderString() const
 	{
 		if (!headers.length)
 		{

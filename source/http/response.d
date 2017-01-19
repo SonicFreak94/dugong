@@ -14,6 +14,8 @@ import http.instance;
 import http.common;
 import http.enums;
 
+/// Convenience function which constructs $(D HttpResponse) with
+/// the given status code and immediately sends it.
 nothrow void sendResponse(ref Socket socket, int statusCode, string statusPhrase = null)
 {
 	try
@@ -21,30 +23,33 @@ nothrow void sendResponse(ref Socket socket, int statusCode, string statusPhrase
 		auto request = new HttpResponse(socket, statusCode, statusPhrase);
 		request.send();
 	}
-	catch (Throwable)
+	catch (Exception)
 	{
 		// ignored
 	}
 }
 
-// Shorthand for sendResponse
+/// Shorthand for sendResponse
 nothrow void sendBadRequest(ref Socket socket)
 {
 	socket.sendResponse(HttpStatus.badRequest);
 }
 
-// Shorthand for sendResponse
+/// Shorthand for sendResponse
 nothrow void sendNotFound(ref Socket socket)
 {
 	socket.sendResponse(HttpStatus.notFound);
 }
 
+/// Response from an HTTP server, or a reply to a request from a client.
 class HttpResponse : HttpInstance
 {
-public:
+private:
 	int statusCode;
 	string statusPhrase;
 
+public:
+	/// same as the other constructor but with a dirty hack
 	this(Socket socket, bool hasBody,
 		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
 	{
@@ -73,7 +78,7 @@ public:
 		throw new Exception("Not implemented");
 	}
 
-	override string toString()
+	override string toString() const
 	{
 		Appender!string result;
 
@@ -118,8 +123,13 @@ public:
 		statusPhrase = line.idup;
 
 		super.parseHeaders();
-		debug import std.stdio;
-		debug synchronized stderr.writeln(toString());
+		
+		debug synchronized
+		{
+			import std.stdio : stderr;
+			stderr.writeln(toString());
+		}
+		
 		return true;
 	}
 }

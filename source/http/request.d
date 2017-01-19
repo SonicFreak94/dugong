@@ -11,17 +11,19 @@ import std.string;
 
 import http;
 
+/// A request received from a client or for sending to a server.
 class HttpRequest : HttpInstance
 {
 private:
 	Socket remote;
 	HttpResponse response;
 	bool established;
-
-public:
 	HttpMethod method;
 	string requestUrl;
 
+public:
+	/// Constructs an instance of $(D HttpRequest) using
+	/// the specified connected socket.
 	this(Socket socket)
 	{
 		super(socket);
@@ -41,45 +43,7 @@ public:
 		closeRemote();
 	}
 
-	bool handlePersistence()
-	{
-		scope (exit)
-		{
-			wait();
-		}
-
-		if (method == HttpMethod.connect)
-		{
-			if (checkRemote())
-			{
-				handleConnect();
-				return false;
-			}
-
-			return true;
-		}
-
-		auto currHost = getHeader("Host");
-		clear();
-
-		scope (exit)
-		{
-			auto newHost = getHeader("Host");
-
-			if (newHost != currHost)
-			{
-				closeRemote();
-			}
-		}
-
-		if (!receive() || !checkRemote())
-		{
-			return false;
-		}
-
-		return true;
-	}
-
+	/// Performs request parsing and/or connection persistence.
 	void run()
 	{
 		scope (exit)
@@ -150,7 +114,7 @@ public:
 						{
 							remote = new HttpSocket(address, port);
 						}
-						catch (Throwable)
+						catch (Exception)
 						{
 							clear();
 							socket.sendNotFound();
@@ -172,9 +136,9 @@ public:
 					break;
 
 				default:
-					debug import std.stdio;
 					debug synchronized
 					{
+						import std.stdio : stderr;
 						stderr.writeln(method.toString());
 					}
 					break;
@@ -189,7 +153,7 @@ public:
 		}
 	}
 
-	override string toString()
+	override string toString() const
 	{
 		Appender!string result;
 
@@ -239,12 +203,54 @@ public:
 
 		super.parseHeaders();
 
-		debug import std.stdio;
-		debug synchronized stderr.writeln(toString());
+		debug synchronized
+		{
+			import std.stdio : stderr;
+			stderr.writeln(toString());
+		}
 		return true;
 	}
 
 private:
+	bool handlePersistence()
+	{
+		scope (exit)
+		{
+			wait();
+		}
+
+		if (method == HttpMethod.connect)
+		{
+			if (checkRemote())
+			{
+				handleConnect();
+				return false;
+			}
+
+			return true;
+		}
+
+		immutable currHost = getHeader("Host");
+		clear();
+
+		scope (exit)
+		{
+			immutable newHost = getHeader("Host");
+
+			if (newHost != currHost)
+			{
+				closeRemote();
+			}
+		}
+
+		if (!receive() || !checkRemote())
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	void closeRemote()
 	{
 		if (response !is null)
@@ -295,7 +301,7 @@ private:
 					socket.sendNotFound();
 					closeRemote();
 				}
-				catch (Throwable)
+				catch (Exception)
 				{
 					// ignored
 				}
