@@ -125,6 +125,7 @@ public:
 
 					send(remote);
 
+					// TODO: fix (did sendYield break it?)
 					response = new HttpResponse(remote, method != head);
 					response.receive();
 					response.send(socket);
@@ -236,7 +237,6 @@ private:
 		scope (exit)
 		{
 			immutable newHost = getHeader("Host");
-
 			if (newHost != currHost)
 			{
 				closeRemote();
@@ -264,8 +264,6 @@ private:
 			remote.disconnect();
 			remote = null;
 		}
-
-		//wait();
 	}
 	bool checkRemote()
 	{
@@ -366,31 +364,39 @@ private:
 			return;
 		}
 
-		auto sch = new FiberScheduler();
-		sch.spawn(
+		auto t = new Thread(
 		{
-			while (forward(remote, socket) > 0)
+			auto sch = new FiberScheduler();
+			sch.spawn(
 			{
-				wait();
-			}
-
-			closeRemote();
-		});
-
-		sch.start(
-		{
-			while (checkRemote())
-			{
-				wait();
-
-				if (!forward(socket, remote))
+				while (forward(remote, socket) > 0)
 				{
-					disconnect();
-					break;
+					Thread.sleep(1.msecs);
 				}
-			}
+
+				closeRemote();
+			});
+
+			sch.start(
+			{
+				while (checkRemote())
+				{
+					if (!forward(socket, remote))
+					{
+						disconnect();
+						break;
+					}
+
+					Thread.sleep(1.msecs);
+				}
+			});
 		});
 
-		wait();
+		t.start();
+
+		while (t.isRunning)
+		{
+			wait();
+		}
 	}
 }
