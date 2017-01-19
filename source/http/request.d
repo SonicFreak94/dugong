@@ -325,7 +325,7 @@ private:
 
 		if (to is null || !to.isAlive)
 		{
-			return 0;
+			return -1;
 		}
 
 		ubyte[1024] buffer;
@@ -337,7 +337,7 @@ private:
 
 		if (length > 0)
 		{
-			to.send(buffer[0 .. length]);
+			to.sendYield(buffer[0 .. length]);
 		}
 
 		while (length == buffer.length)
@@ -351,7 +351,7 @@ private:
 
 			if (length > 0)
 			{
-				to.send(buffer[0 .. length]);
+				to.sendYield(buffer[0 .. length]);
 				result += length;
 			}
 		}

@@ -91,10 +91,15 @@ const enum HTTP_BREAK = "\r\n";
 /// there is data to be received. The connection will time out just like a blocking socket.
 ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 {
-	ptrdiff_t length = -1;
+	if (socket is null || !socket.isAlive)
+	{
+		return 0;
+	}
 
+	ptrdiff_t length = -1;
 	const start = MonoTime.currTime;
 	Duration timeout;
+
 	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
 
 	do
@@ -111,9 +116,48 @@ ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 			wait();
 			continue;
 		}
-	} while (length <= 0 && MonoTime.currTime - start < timeout);
+	} while (length < 1 && MonoTime.currTime - start < timeout);
 
 	return length;
+}
+
+/// Same as $(D Socket.send), but for non-blocking sockets. Calls $(D yield) every
+/// loop until the data is fully sent, or until the connection times out.
+ptrdiff_t sendYield(ref Socket socket, const(void)[] buffer)
+{
+	if (socket is null || !socket.isAlive)
+	{
+		return 0;
+	}
+
+	ptrdiff_t result, sent;
+	auto start = MonoTime.currTime;
+	Duration timeout;
+
+	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
+
+	do
+	{
+		sent = socket.send(buffer[result .. $]);
+
+		if (sent == Socket.ERROR)
+		{
+			wait();
+			if (!wouldHaveBlocked())
+			{
+				return 0;
+			}
+		}
+		else if (sent > 0)
+		{
+			result += sent;
+			start = MonoTime.currTime;
+		}
+
+		wait();
+	} while (socket.isAlive && result < buffer.length && sent < 1 && MonoTime.currTime - start < timeout);
+
+	return result;
 }
 
 /// Attemps to read a whole line from a socket.
@@ -282,7 +326,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	return rlength;
 }
 
-/// Convenience function for writing lines to Appender
+/// Convenience function for writing lines to $(D Appender)
 @safe void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
@@ -292,10 +336,10 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 
 	output.put(HTTP_BREAK);
 }
-/// ditto
-@safe void writeln(A...)(ref Socket socket, A args)
+/// Convenience function for writing lines to $(D Socket)
+@safe auto writeln(A...)(ref Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);
-	socket.send(builder.data);
+	return socket.sendYield(builder.data);
 }

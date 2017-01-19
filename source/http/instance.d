@@ -90,19 +90,19 @@ public:
 
 		if (hasBody && body_.empty)
 		{
-			s.send(str);
+			s.sendYield(str);
 
 			if (isChunked)
 			{
 				foreach (buffer; getChunks())
 				{
-					s.send(buffer);
+					s.sendYield(buffer);
 				}
 			}
 		}
 		else
 		{
-			s.send(cast(ubyte[])str ~ body_);
+			s.sendYield(cast(ubyte[])str ~ body_);
 		}
 	}
 
