@@ -156,10 +156,28 @@ final:
 			auto key = header.munch("^:").idup;
 			header.munch(": ");
 
-			// Skip duplicate Content-Length headers.
-			if (!sicmp(key, "Content-Length") && !getHeader(key).empty)
+			// If more than one Content-Length header is
+			// specified, take the smaller of the two.
+			if (!sicmp(key, "Content-Length"))
 			{
-				continue;
+				try
+				{
+					auto length = getHeader(key);
+					if (!length.empty)
+					{
+						auto existing = to!size_t(length);
+						auto received = to!size_t(header);
+
+						if (existing < received)
+						{
+							continue;
+						}
+					}
+				}
+				catch (Exception)
+				{
+					// ignored
+				}
 			}
 
 			headers[key] = header.idup;
