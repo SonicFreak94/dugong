@@ -101,6 +101,7 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 	Duration timeout;
 
 	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+	enforce(timeout >= 1.msecs, "SocketOption.RCVTIMEO must be at least 1ms");
 
 	do
 	{
@@ -163,17 +164,10 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 /// Attemps to read a whole line from a socket.
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
-	enforce(!socket.blocking, "socket must not be blocking");
 	Appender!(char[]) result;
 	char[1024] buffer;
 	ptrdiff_t index = -1;
 	ptrdiff_t length = -1;
-
-	if (!socket.isAlive)
-	{
-		overflow.clear();
-		return 0;
-	}
 
 	if (overflow.data == HTTP_BREAK)
 	{
@@ -188,6 +182,14 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 
 	if (str.empty)
 	{
+		if (socket is null || !socket.isAlive)
+		{
+			overflow.clear();
+			return 0;
+		}
+
+		enforce(!socket.blocking, "socket must not be blocking");
+
 		while (index < 0 && socket.isAlive)
 		{
 			length = socket.receiveYield(buffer);
@@ -234,7 +236,7 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 	enforce(result.data.empty,          `Unhandled data still remains in the buffer.`);
 
 	output = str[0 .. $ - HTTP_BREAK.length];
-	return output.length;
+	return str.length;
 }
 
 /// Attempts to read a specified number of bytes from a socket.
@@ -258,7 +260,7 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 		overflow.clear();
 	}
 
-	while (result.data.length < target && socket.isAlive)
+	while (result.data.length < target)
 	{
 		length = socket.receiveYield(buffer);
 

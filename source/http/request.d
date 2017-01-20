@@ -39,7 +39,6 @@ public:
 	override void disconnect()
 	{
 		super.disconnect();
-		enforce(socket is null);
 		closeRemote();
 	}
 
@@ -110,14 +109,16 @@ public:
 
 					if (!checkRemote())
 					{
+						closeRemote();
+
 						try
 						{
 							remote = new HttpSocket(address, port);
 						}
 						catch (Exception)
 						{
-							clear();
 							socket.sendNotFound();
+							clear();
 							closeRemote();
 							break;
 						}
@@ -125,7 +126,6 @@ public:
 
 					send(remote);
 
-					// TODO: fix (did sendYield break it?)
 					response = new HttpResponse(remote, method != head);
 					response.receive();
 					response.send(socket);
@@ -243,8 +243,14 @@ private:
 			}
 		}
 
-		if (!receive() || !checkRemote())
+		if (!receive())
 		{
+			return false;
+		}
+
+		if (!checkRemote())
+		{
+			closeRemote();
 			return false;
 		}
 
@@ -267,18 +273,7 @@ private:
 	}
 	bool checkRemote()
 	{
-		if (remote is null)
-		{
-			return false;
-		}
-
-		if (!remote.isAlive)
-		{
-			closeRemote();
-			return false;
-		}
-
-		return true;
+		return remote !is null && remote.isAlive;
 	}
 
 	void handleConnect()
@@ -359,8 +354,14 @@ private:
 
 	void connectProxy()
 	{
-		if (!socket.isAlive || !checkRemote())
+		if (!socket.isAlive)
 		{
+			return;
+		}
+
+		if (!checkRemote())
+		{
+			closeRemote();
 			return;
 		}
 
