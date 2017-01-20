@@ -78,7 +78,7 @@ const enum HTTP_BREAK = "\r\n";
 }
 
 /// Calls $(D shutdown(SocketShutdown.BOTH)) on $(D socket) before closing it.
-@safe void disconnect(ref Socket socket)
+@safe void disconnect(Socket socket)
 {
 	if (socket !is null)
 	{
@@ -89,7 +89,7 @@ const enum HTTP_BREAK = "\r\n";
 
 /// Same as $(D Socket.receive), but for non-blocking sockets. Calls $(D yield) until 
 /// there is data to be received. The connection will time out just like a blocking socket.
-ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
+ptrdiff_t receiveYield(Socket socket, void[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -123,7 +123,7 @@ ptrdiff_t receiveYield(ref Socket socket, void[] buffer)
 
 /// Same as $(D Socket.send), but for non-blocking sockets. Calls $(D yield) every
 /// loop until the data is fully sent, or until the connection times out.
-ptrdiff_t sendYield(ref Socket socket, const(void)[] buffer)
+ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -161,7 +161,7 @@ ptrdiff_t sendYield(ref Socket socket, const(void)[] buffer)
 }
 
 /// Attemps to read a whole line from a socket.
-ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] output)
+ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
 	enforce(!socket.blocking, "socket must not be blocking");
 	Appender!(char[]) result;
@@ -238,7 +238,7 @@ ptrdiff_t readln(ref Socket socket, ref Appender!(char[]) overflow, out char[] o
 }
 
 /// Attempts to read a specified number of bytes from a socket.
-ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
+ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
 {
 	Appender!(char[]) result;
 	char[1024] buffer;
@@ -285,7 +285,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 /// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
 /// Returns: The number of bytes actually received, $(D 0) if the remote side
 /// has closed the connection, or $(D Socket.ERROR) on failure.
-@trusted ptrdiff_t readChunk(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[] data)
+@trusted ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] data)
 {
 	Appender!(char[]) result;
 	ptrdiff_t rlength;
@@ -337,7 +337,7 @@ ptrdiff_t readlen(ref Socket socket, ref Appender!(char[]) overflow, out ubyte[]
 	output.put(HTTP_BREAK);
 }
 /// Convenience function for writing lines to $(D Socket)
-@safe auto writeln(A...)(ref Socket socket, A args)
+@safe auto writeln(A...)(Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);

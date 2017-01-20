@@ -16,7 +16,7 @@ import http.enums;
 
 /// Convenience function which constructs $(D HttpResponse) with
 /// the given status code and immediately sends it.
-nothrow void sendResponse(ref Socket socket, int statusCode, string statusPhrase = null)
+nothrow void sendResponse(Socket socket, int statusCode, string statusPhrase = null)
 {
 	try
 	{
@@ -30,13 +30,13 @@ nothrow void sendResponse(ref Socket socket, int statusCode, string statusPhrase
 }
 
 /// Shorthand for sendResponse
-nothrow void sendBadRequest(ref Socket socket)
+nothrow void sendBadRequest(Socket socket)
 {
 	socket.sendResponse(HttpStatus.badRequest);
 }
 
 /// Shorthand for sendResponse
-nothrow void sendNotFound(ref Socket socket)
+nothrow void sendNotFound(Socket socket)
 {
 	socket.sendResponse(HttpStatus.notFound);
 }

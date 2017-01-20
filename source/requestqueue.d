@@ -82,7 +82,7 @@ public:
 	/// Calls $(D Thread.join) on all the threads managed by this instance.
 	void join()
 	{
-		foreach (size_t i, ref FiberThread t; threads)
+		foreach (size_t i, ref t; threads)
 		{
 			join(i, t);
 		}
