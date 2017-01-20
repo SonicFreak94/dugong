@@ -143,7 +143,6 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 
 		if (sent == Socket.ERROR)
 		{
-			wait();
 			if (!wouldHaveBlocked())
 			{
 				return 0;
@@ -164,8 +163,9 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 /// Attemps to read a whole line from a socket.
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
-	Appender!(char[]) result;
 	char[1024] buffer;
+	Appender!(char[]) result;
+	char[] str;
 	ptrdiff_t index = -1;
 	ptrdiff_t length = -1;
 
@@ -175,10 +175,14 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 		return -1;
 	}
 
-	result.put(overflow.data);
-	overflow.clear();
+	result.clear();
 
-	auto str = result.overflow(overflow);
+	if (!overflow.data.empty)
+	{
+		result.put(overflow.data);
+		overflow.clear();
+		str = result.overflow(overflow);
+	}
 
 	if (str.empty)
 	{
@@ -239,6 +243,18 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 	return str.length;
 }
 
+/// Read from the specified socket by line.
+Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
+{
+	return new Generator!(char[])(
+	{
+		for (char[] line; socket.readln(overflow, line) > 0;)
+		{
+			yield(line);
+		}
+	});
+}
+
 /// Attempts to read a specified number of bytes from a socket.
 ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
 {
@@ -287,7 +303,7 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 /// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
 /// Returns: The number of bytes actually received, $(D 0) if the remote side
 /// has closed the connection, or $(D Socket.ERROR) on failure.
-@trusted ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] data)
+@trusted ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output)
 {
 	Appender!(char[]) result;
 	ptrdiff_t rlength;
@@ -324,7 +340,7 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 		}
 	}
 
-	data = (cast(ubyte[])result.data).dup;
+	output = (cast(ubyte[])result.data).dup;
 	return rlength;
 }
 

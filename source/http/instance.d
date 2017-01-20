@@ -93,7 +93,7 @@ public:
 
 			if (isChunked)
 			{
-				foreach (buffer; getChunks())
+				foreach (buffer; byChunk())
 				{
 					s.sendYield(buffer);
 				}
@@ -111,13 +111,14 @@ public:
 	}
 
 final:
+	/// Indicates whether or not this instance uses connection persistence.
 	@property bool isPersistent() { return persistent; }
+	/// Indicates whether or not this instance expects to have a body.
 	@property bool hasBody() { return hasBody_; }
+	/// Indicates whether or not the Transfer-Encoding header is present in this instance.
 	@property bool isChunked() { return chunked; }
-	@property bool connected()
-	{
-		return socket !is null && socket.isAlive;
-	}
+	/// Indicates whether or not ths instance is connected.
+	@property bool connected() { return socket !is null && socket.isAlive; }
 
 	string getHeader(in string key, string* realKey = null)
 	{
@@ -151,8 +152,13 @@ final:
 	void parseHeaders()
 	{
 		ptrdiff_t rlength = -1;
-		for (char[] header; (rlength = socket.readln(overflow, header)) > 0 && !header.empty;)
+		foreach (char[] header; socket.byLine(overflow))
 		{
+			if (header.empty)
+			{
+				break;
+			}
+
 			auto key = header.munch("^:").idup;
 			header.munch(": ");
 
@@ -162,11 +168,11 @@ final:
 			{
 				try
 				{
-					auto length = getHeader(key);
+					immutable length = getHeader(key);
 					if (!length.empty)
 					{
-						auto existing = to!size_t(length);
-						auto received = to!size_t(header);
+						const existing = to!size_t(length);
+						const received = to!size_t(header);
 
 						if (existing < received)
 						{
@@ -184,7 +190,7 @@ final:
 		}
 
 		string key;
-		auto contentLength = getHeader("Content-Length", &key);
+		immutable contentLength = getHeader("Content-Length", &key);
 		chunked = !getHeader("Transfer-Encoding").empty;
 
 		if (!contentLength.empty)
@@ -242,9 +248,10 @@ final:
 		return headers.byKeyValue.map!(x => x.key ~ ": " ~ x.value).join("\r\n");
 	}
 
-	Generator!(ubyte[]) getChunks()
+	/// Read data from this instance by chunk (Transfer-Encoding)
+	Generator!(ubyte[]) byChunk()
 	{
-		enforce(isChunked, "getChunks() called on response with no chunked data.");
+		enforce(isChunked, "byChunk() called on response with no chunked data.");
 
 		return new Generator!(ubyte[])(
 		{
