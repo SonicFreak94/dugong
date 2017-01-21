@@ -176,7 +176,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 /// Attemps to read a whole line from a socket.
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
-	char[HTTP_BUFFLEN] buffer;
+	auto buffer = new char[HTTP_BUFFLEN];
 	Appender!(char[]) result;
 	char[] str;
 	ptrdiff_t index = -1;
@@ -187,8 +187,6 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 		overflow.clear();
 		return -1;
 	}
-
-	result.clear();
 
 	if (!overflow.data.empty)
 	{
@@ -222,16 +220,16 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 
 			if (index < 0)
 			{
-				result.put(buffer[0 .. length].dup);
+				result.put(buffer[0 .. length]);
 			}
 			else
 			{
 				auto i = index + HTTP_BREAK.length;
-				result.put(buffer[0 .. i].dup);
+				result.put(buffer[0 .. i]);
 
 				if (i < length)
 				{
-					overflow.put(buffer[i .. length].dup);
+					overflow.put(buffer[i .. length]);
 				}
 			}
 
@@ -272,7 +270,7 @@ Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 /// Yields each block of data as it is redeived until the target size is reached.
 private ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
-	ubyte[HTTP_BUFFLEN] buffer;
+	auto buffer = new ubyte[HTTP_BUFFLEN];
 	ptrdiff_t result = 0;
 
 	yield(cast(ubyte[])overflow.data[0 .. min($, target)]);
@@ -301,11 +299,11 @@ private ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdi
 		}
 
 		auto remainder = target - result;
-		yield(buffer[0 .. min(length, remainder)].dup);
+		yield(buffer[0 .. min(length, remainder)]);
 
 		if (remainder < length)
 		{
-			overflow.put(buffer[remainder .. length].dup);
+			overflow.put(buffer[remainder .. length]);
 		}
 
 		result += length;
@@ -373,7 +371,7 @@ ptrdiff_t peek(Socket socket, void[] buffer)
 /// Ditto
 ptrdiff_t peek(Socket socket)
 {
-	ubyte[HTTP_BUFFLEN] buffer;
+	auto buffer = new ubyte[HTTP_BUFFLEN];
 	return peek(socket, buffer);
 }
 
