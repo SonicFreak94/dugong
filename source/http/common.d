@@ -90,6 +90,16 @@ private const enum HTTP_BUFFLEN = 4096;
 	}
 }
 
+@safe void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
+{
+	if (socket !is null)
+	{
+		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
+		socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+		socket.setKeepAlive(keepAlive, keepAlive);
+	}
+}
+
 /// Same as $(D Socket.receive), but for non-blocking sockets. Calls $(D yield) until 
 /// there is data to be received. The connection will time out just like a blocking socket.
 ptrdiff_t receiveYield(Socket socket, void[] buffer)

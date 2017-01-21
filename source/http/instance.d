@@ -54,7 +54,7 @@ protected:
 	ubyte[] body_;
 
 public:
-	this(Socket socket, bool hasBody = true, lazy Duration timeout = 5.seconds)
+	this(Socket socket, bool hasBody = true, int keepAlive = 3, lazy Duration timeout = 5.seconds)
 	{
 		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");
@@ -62,8 +62,7 @@ public:
 		this.socket = socket;
 		this.hasBody_ = hasBody;
 		this.socket.blocking = false;
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
-		this.socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+		this.socket.setTimeouts(keepAlive, timeout);
 	}
 
 	void disconnect()

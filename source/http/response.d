@@ -10,9 +10,9 @@ import std.range;
 import std.string;
 import std.uni : sicmp;
 
-import http.instance;
 import http.common;
 import http.enums;
+import http.instance;
 
 /// Convenience function which constructs $(D HttpResponse) with
 /// the given status code and immediately sends it.

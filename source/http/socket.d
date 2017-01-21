@@ -3,32 +3,29 @@ module http.socket;
 public import std.socket;
 
 import core.time;
+import http.common : setTimeouts;
 
 /// Convenience wrapper for TcpSocket
 class HttpSocket : TcpSocket
 {
 public:
-	this(lazy Duration timeout = 5.seconds)
+	this(int keepAlive = 3, lazy Duration timeout = 5.seconds)
 	{
 		super();
 		super.blocking = false;
-
-		setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
-		setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+		this.setTimeouts(keepAlive, timeout);
 	}
 
-	this(InternetAddress addr, lazy Duration timeout = 5.seconds)
+	this(InternetAddress addr, int keepAlive = 3, lazy Duration timeout = 5.seconds)
 	{
 		super(addr);
 		super.blocking = false;
-
-		setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
-		setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+		this.setTimeouts(keepAlive, timeout);
 	}
 
-	this(in string address, ushort port, lazy Duration timeout = 5.seconds)
+	this(in string address, ushort port, int keepAlive = 3, lazy Duration timeout = 5.seconds)
 	{
 		auto addr = new InternetAddress(address, port);
-		this(addr, timeout);
+		this(addr, keepAlive, timeout);
 	}
 }
