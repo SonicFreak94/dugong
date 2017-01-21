@@ -40,26 +40,64 @@ int main(string[] argv)
 	}
 
 	stdout.writeln("Started. Opening socket...");
+	auto listeners = [
+		new Socket(AddressFamily.INET, SocketType.STREAM),
+		//new Socket(AddressFamily.INET6, SocketType.STREAM)
+	];
 
-	Socket listener = new TcpSocket();
+	listeners.each!(x => x.blocking = false);
 
-	for (ushort i = 0; i < bindRetry; i++)
+	for (ushort i = 0; i <= bindRetry; i++)
 	{
 		try
 		{
-			listener.bind(new InternetAddress(proxyPort));
+			listeners[0].bind(new InternetAddress(proxyPort));
 			break;
 		}
 		catch (Exception ex)
 		{
-			stderr.writeln(ex.msg);
-			stderr.writeln("Retrying...");
-			Thread.sleep(1.seconds);
+			if (i < bindRetry)
+			{
+				stderr.writeln(ex.msg);
+				stderr.writefln("[IPv4] Retrying... [%d/%d]", i + 1, bindRetry);
+				Thread.sleep(1.seconds);
+			}
+			else
+			{
+				stderr.writeln(ex.msg);
+				stderr.writeln("Aborting.");
+				return -1;
+			}
 		}
 	}
-	
-	listener.blocking = false;
-	listener.listen(1);
+
+/*
+	for (ushort i = 0; i <= bindRetry; i++)
+	{
+		try
+		{
+			listeners[1].bind(new Internet6Address(cast(ushort)(proxyPort + 1)));
+			break;
+		}
+		catch (Exception ex)
+		{
+			if (i < bindRetry)
+			{
+				stderr.writeln(ex.msg);
+				stderr.writefln("[IPv6] Retrying... [%d/%d]", i + 1, bindRetry);
+				Thread.sleep(1.seconds);
+			}
+			else
+			{
+				stderr.writeln(ex.msg);
+				stderr.writeln("Aborting.");
+				return -1;
+			}
+		}
+	}
+*/
+
+	listeners.each!(x => x.listen(1));
 
 	stdout.writeln("Listening on port ", proxyPort);
 
@@ -67,16 +105,19 @@ int main(string[] argv)
 	auto queue = new RequestQueue(threadCount);
 	size_t count;
 
-	while (listener.isAlive)
+	while (listeners.all!(x => x.isAlive))
 	{
 		try
 		{
-			socketSet.add(listener);
+			listeners.each!(x => socketSet.add(x));
 			Socket.select(socketSet, null, null, 1.msecs);
 
-			if (socketSet.isSet(listener))
+			foreach (l; listeners)
 			{
-				queue.add(new HttpRequest(listener.accept()));
+				if (socketSet.isSet(l))
+				{
+					queue.add(new HttpRequest(l.accept()));
+				}
 			}
 		}
 		catch (Exception ex)
@@ -95,6 +136,6 @@ int main(string[] argv)
 	}
 
 	queue.join();
-	listener.disconnect();
+	listeners.each!(x => x.disconnect());
 	return 0;
 }
