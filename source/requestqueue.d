@@ -14,8 +14,7 @@ private class FiberThread : Thread
 public:
 	this()
 	{
-		/*debug queue = new FiberQueue(1);
-		else  */queue = new FiberQueue();
+		queue = new FiberQueue();
 		super(&queue.run);
 	}
 
@@ -31,12 +30,11 @@ private:
 
 public:
 	/// Params:
-	///	threadCount = Number of threads allowed to run.
-	/// Defaults to the system's total CPU threads.'
-	this(size_t threadCount = totalCPUs)
+	///	threadCount = Maximum number of worker threads.
+	this(size_t threadCount)
 	{
-		this.threadCount = threadCount;
-		threads = new FiberThread[threadCount];
+		this.threadCount = !threadCount ? totalCPUs : threadCount;
+		threads = new FiberThread[this.threadCount];
 
 		foreach (ref t; threads)
 		{

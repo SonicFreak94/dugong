@@ -16,13 +16,16 @@ import requestqueue;
 ushort bindRetry = 100;
 /// The port to listen on for connections.
 ushort proxyPort = 3128;
+/// Number of allowed worker threads.
+size_t threadCount;
 
 int main(string[] argv)
 {
 	try
 	{
 		auto opt = getopt(argv,
-			"p|port", "The port to listen on for connections.", &proxyPort);
+			"p|port", "The port to listen on for connections.", &proxyPort,
+			"t|threads", "Maximum number of worker threads.", &threadCount);
 
 		if (opt.helpWanted)
 		{
@@ -61,8 +64,7 @@ int main(string[] argv)
 	stdout.writeln("Listening on port ", proxyPort);
 
 	auto socketSet = new SocketSet();
-	/*debug auto queue = new RequestQueue(1);
-	else  */auto queue = new RequestQueue();
+	auto queue = new RequestQueue(threadCount);
 	size_t count;
 
 	while (listener.isAlive)
