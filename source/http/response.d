@@ -102,7 +102,7 @@ public:
 		clear();
 
 		char[] line;
-		if (!socket.readln(overflow, line) && line.empty)
+		if (!socket.readln(overflow, line) < 1 && line.empty)
 		{
 			disconnect();
 			return false;

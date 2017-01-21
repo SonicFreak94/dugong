@@ -344,6 +344,18 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 	return rlength;
 }
 
+/// Peek at incoming data on the specified socket.
+ptrdiff_t peek(Socket socket, void[] buffer)
+{
+	return socket.receive(buffer, SocketFlags.PEEK);
+}
+/// Ditto
+ptrdiff_t peek(Socket socket)
+{
+	ubyte[1024] buffer;
+	return peek(socket, buffer);
+}
+
 /// Convenience function for writing lines to $(D Appender)
 @safe void writeln(T, A...)(ref Appender!T output, A args)
 {

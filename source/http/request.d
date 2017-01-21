@@ -174,7 +174,7 @@ public:
 	{
 		char[] line;
 
-		if (!socket.readln(overflow, line) && line.empty)
+		if (socket.readln(overflow, line) < 1 && line.empty)
 		{
 			disconnect();
 			return false;
@@ -243,8 +243,9 @@ private:
 			}
 		}
 
-		if (!receive())
+		if (!receive() || !socket.peek())
 		{
+			disconnect();
 			return false;
 		}
 
@@ -273,7 +274,7 @@ private:
 	}
 	bool checkRemote()
 	{
-		return remote !is null && remote.isAlive;
+		return remote !is null && remote.isAlive && remote.peek() != 0;
 	}
 
 	void handleConnect()
