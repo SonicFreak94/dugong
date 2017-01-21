@@ -14,6 +14,7 @@ import std.range;
 import std.string;
 
 // TODO: use a range (or even array) instead of appender for overflow buffers
+// TODO: consider uninitializedArray for local buffers
 
 /// Sleeps the thread and then yields.
 void wait()
@@ -23,7 +24,9 @@ void wait()
 }
 
 /// Represents an HTTP EOL
-const enum HTTP_BREAK = "\r\n";
+private const enum HTTP_BREAK = "\r\n";
+/// Receive buffer size
+private const enum HTTP_BUFFLEN = 4096;
 
 /// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
 /// Params:
@@ -163,7 +166,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 /// Attemps to read a whole line from a socket.
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
-	char[1024] buffer;
+	char[HTTP_BUFFLEN] buffer;
 	Appender!(char[]) result;
 	char[] str;
 	ptrdiff_t index = -1;
@@ -256,13 +259,13 @@ Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 }
 
 /// Attempts to read a specified number of bytes from a socket.
-ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output, size_t target)
+/// Yields each block of data as it is redeived until the target size is reached.
+private ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
-	Appender!(char[]) result;
-	char[1024] buffer;
-	ptrdiff_t length = -1;
+	ubyte[HTTP_BUFFLEN] buffer;
+	ptrdiff_t result = 0;
 
-	result.put(overflow.data[0 .. min($, target)]);
+	yield(cast(ubyte[])overflow.data[0 .. min($, target)]);
 
 	if (target < overflow.data.length)
 	{
@@ -276,28 +279,34 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 		overflow.clear();
 	}
 
-	while (result.data.length < target)
+	while (result < target)
 	{
-		length = socket.receiveYield(buffer);
+		auto length = socket.receiveYield(buffer);
 
 		if (!length || length == Socket.ERROR)
 		{
 			// maybe send?
 			overflow.clear();
-			break;
+			return length;
 		}
 
-		auto remainder = target - result.data.length;
-		result.put(buffer[0 .. min(length, remainder)].dup);
+		auto remainder = target - result;
+		yield(buffer[0 .. min(length, remainder)].dup);
 
 		if (remainder < length)
 		{
 			overflow.put(buffer[remainder .. length].dup);
 		}
+
+		result += length;
 	}
 
-	output = result.data.empty ? null : cast(ubyte[])result.data;
-	return length;
+	return result;
+}
+/// Ditto
+Generator!(ubyte[]) byBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
+{
+	return new Generator!(ubyte[])({ socket.readBlock(overflow, target); });
 }
 
 /// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
@@ -315,14 +324,16 @@ ptrdiff_t readlen(Socket socket, ref Appender!(char[]) overflow, out ubyte[] out
 			continue;
 		}
 
+		yield(cast(ubyte[])(line ~ HTTP_BREAK)); // trusted
 		result.writeln(line);
 
-		ubyte[] buffer;
-		auto length = to!size_t(line, 16);
-		socket.readlen(overflow, buffer, length + 2);
+		auto length = to!ptrdiff_t(line, 16);
 
-		yield(cast(ubyte[])(line ~ HTTP_BREAK) ~ buffer); // trusted
-		result.put(buffer);
+		foreach (block; socket.byBlock(overflow, length + 2))
+		{
+			yield(block);
+			result.put(block);
+		}
 
 		if (!length || line.empty)
 		{
@@ -352,7 +363,7 @@ ptrdiff_t peek(Socket socket, void[] buffer)
 /// Ditto
 ptrdiff_t peek(Socket socket)
 {
-	ubyte[1024] buffer;
+	ubyte[HTTP_BUFFLEN] buffer;
 	return peek(socket, buffer);
 }
 

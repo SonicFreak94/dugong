@@ -20,8 +20,8 @@ nothrow void sendResponse(Socket socket, int statusCode, string statusPhrase = n
 {
 	try
 	{
-		auto request = new HttpResponse(socket, statusCode, statusPhrase);
-		request.send();
+		auto response = new HttpResponse(socket, false, statusCode, statusPhrase);
+		response.send();
 	}
 	catch (Exception)
 	{
@@ -49,7 +49,6 @@ private:
 	string statusPhrase;
 
 public:
-	/// same as the other constructor but with a dirty hack
 	this(Socket socket, bool hasBody,
 		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
 	{
@@ -58,12 +57,6 @@ public:
 		this.statusCode   = statusCode;
 		this.statusPhrase = statusPhrase;
 		this.version_     = version_;
-	}
-
-	this(Socket socket,
-		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
-	{
-		this(socket, true, statusCode, statusPhrase, version_);
 	}
 
 	override void clear()

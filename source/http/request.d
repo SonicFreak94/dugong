@@ -303,7 +303,7 @@ private:
 				return;
 			}
 
-			auto response = new HttpResponse(socket);
+			auto response = new HttpResponse(socket, false);
 			response.send();
 		}
 

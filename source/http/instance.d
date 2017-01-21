@@ -85,23 +85,37 @@ public:
 
 	void send(Socket s)
 	{
-		auto str = toString();
+		// This toString() is implemented by the inheriting class.
+		s.sendYield(toString());
 
-		if (hasBody && body_.empty)
+		if (!body_.empty)
 		{
-			s.sendYield(str);
+			s.sendYield(body_);
+			return;
+		}
 
-			if (isChunked)
+		// TODO: multi-part
+		// TODO: connection abort
+
+		if (isChunked)
+		{
+			foreach (chunk; byChunk())
 			{
-				foreach (buffer; byChunk())
+				if (s.sendYield(chunk) < 1)
 				{
-					s.sendYield(buffer);
+					break;
 				}
 			}
 		}
-		else
+		else if (hasBody)
 		{
-			s.sendYield(cast(ubyte[])str ~ body_);
+			foreach (block; byBlock())
+			{
+				if (s.sendYield(block) < 1)
+				{
+					break;
+				}
+			}
 		}
 	}
 
@@ -114,7 +128,7 @@ final:
 	/// Indicates whether or not this instance uses connection persistence.
 	@property bool isPersistent() { return persistent; }
 	/// Indicates whether or not this instance expects to have a body.
-	@property bool hasBody() { return hasBody_; }
+	@property bool hasBody() { return chunked || hasBody_; }
 	/// Indicates whether or not the Transfer-Encoding header is present in this instance.
 	@property bool isChunked() { return chunked; }
 	/// Indicates whether or not ths instance is connected.
@@ -151,7 +165,6 @@ final:
 	/// $(D headers), performs error handling, maybe more idk.
 	void parseHeaders()
 	{
-		ptrdiff_t rlength = -1;
 		foreach (char[] header; socket.byLine(overflow))
 		{
 			if (header.empty)
@@ -193,16 +206,13 @@ final:
 		immutable contentLength = getHeader("Content-Length", &key);
 		chunked = !getHeader("Transfer-Encoding").empty;
 
-		if (!contentLength.empty)
+		if (!contentLength.empty && chunked)
 		{
-			if (chunked)
-			{
-				enforce(headers.remove(key));
-			}
-			else if (hasBody)
-			{
-				rlength = socket.readlen(overflow, body_, to!size_t(contentLength));
-			}
+			enforce(headers.remove(key));
+		}
+		else if (hasBody_)
+		{
+			hasBody_ = !contentLength.empty;
 		}
 
 		auto connection = getHeader("Connection");
@@ -230,11 +240,6 @@ final:
 				disconnect();
 				return;
 		}
-
-		if (!rlength)
-		{
-			disconnect();
-		}
 	}
 
 	/// Converts the key-value pairs in $(D headers) to a string.
@@ -248,10 +253,10 @@ final:
 		return headers.byKeyValue.map!(x => x.key ~ ": " ~ x.value).join("\r\n");
 	}
 
-	/// Read data from this instance by chunk (Transfer-Encoding)
-	Generator!(ubyte[]) byChunk()
+	/// Read data from this instance by chunk (Transfer-Encoding).
+	auto byChunk()
 	{
-		enforce(isChunked, "byChunk() called on response with no chunked data.");
+		enforce(isChunked, "byChunk() called on instance with no chunked data.");
 
 		return new Generator!(ubyte[])(
 		{
@@ -261,5 +266,15 @@ final:
 				disconnect();
 			}
 		});
+	}
+
+	/// Read data from this instance by block (requires Content-Length).
+	auto byBlock()
+	{
+		immutable header = getHeader("Content-Length");
+		enforce(!header.empty, "byBlock() called on instance with no Content-Length header.");
+
+		const length = to!size_t(header);
+		return socket.byBlock(overflow, length);
 	}
 }
