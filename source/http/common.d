@@ -32,7 +32,7 @@ private const enum HTTP_BUFFLEN = 4096;
 /// Params:
 ///		str = An $(D Appender!(char[])) to scan for a line.
 /// Returns: The line if found, else null.
-@safe char[] getln(ref Appender!(char[]) str)
+char[] getln(ref Appender!(char[]) str)
 {
 	if (str.data.empty)
 	{
@@ -51,7 +51,7 @@ private const enum HTTP_BUFFLEN = 4096;
 /// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
 /// data into the output $(D Appender!(char[])).
 /// Returns: The line if found, else null.
-@safe char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output)
+char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
 	auto result = input.getln();
@@ -81,7 +81,7 @@ private const enum HTTP_BUFFLEN = 4096;
 }
 
 /// Calls $(D shutdown(SocketShutdown.BOTH)) on $(D socket) before closing it.
-@safe void disconnect(Socket socket)
+void disconnect(Socket socket)
 {
 	if (socket !is null)
 	{
@@ -90,7 +90,7 @@ private const enum HTTP_BUFFLEN = 4096;
 	}
 }
 
-@safe void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
+void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
 {
 	if (socket !is null)
 	{
@@ -128,7 +128,6 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 			}
 
 			wait();
-			continue;
 		}
 	} while (length < 1 && MonoTime.currTime - start < timeout);
 
@@ -268,17 +267,19 @@ Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 
 /// Attempts to read a specified number of bytes from a socket.
 /// Yields each block of data as it is redeived until the target size is reached.
-private ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
+ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
+	ptrdiff_t result;
 	auto buffer = new ubyte[HTTP_BUFFLEN];
-	ptrdiff_t result = 0;
 
-	yield(cast(ubyte[])overflow.data[0 .. min($, target)]);
+	auto arr = overflow.data[0 .. min($, target)].representation.dup;
+	yield(arr);
+	result += arr.length;
 
 	if (target < overflow.data.length)
 	{
 		// .dup prevents a crash related to overlapping
-		auto arr = overflow.data[target .. $].dup;
+		arr = overflow.data[target .. $].representation.dup;
 		overflow.clear();
 		overflow.put(arr);
 	}
@@ -299,40 +300,44 @@ private ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdi
 		}
 
 		auto remainder = target - result;
-		yield(buffer[0 .. min(length, remainder)]);
+		arr = buffer[0 .. min(length, remainder)].dup;
+		result += arr.length;
+		yield(arr);
 
 		if (remainder < length)
 		{
-			overflow.put(buffer[remainder .. length]);
+			overflow.put(buffer[remainder .. length].dup);
 		}
-
-		result += length;
 	}
 
+	enforce(result == target, "retrieved does not match target size");
 	return result;
 }
 /// Ditto
 Generator!(ubyte[]) byBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
-	return new Generator!(ubyte[])({ socket.readBlock(overflow, target); });
+	return new Generator!(ubyte[])(
+	{
+		socket.readBlock(overflow, target);
+	});
 }
 
 /// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
 /// Returns: The number of bytes actually received, $(D 0) if the remote side
 /// has closed the connection, or $(D Socket.ERROR) on failure.
-@trusted ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output)
+ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output)
 {
 	Appender!(char[]) result;
 	ptrdiff_t rlength;
 
-	for (char[] line; (rlength = socket.readln(overflow, line)) > 0;)
+	for (char[] line; socket.readln(overflow, line) > 0;)
 	{
 		if (line.empty)
 		{
 			continue;
 		}
 
-		yield(cast(ubyte[])(line ~ HTTP_BREAK)); // trusted
+		yield((line ~ HTTP_BREAK).representation.dup);
 		result.writeln(line);
 
 		auto length = to!ptrdiff_t(line, 16);
@@ -355,11 +360,11 @@ Generator!(ubyte[]) byBlock(Socket socket, ref Appender!(char[]) overflow, ptrdi
 		for (char[] line; (rlength = socket.readln(overflow, line)) > 0;)
 		{
 			result.writeln(line);
-			yield(cast(ubyte[])(line ~ HTTP_BREAK)); // trusted
+			yield((line ~ HTTP_BREAK).representation.dup);
 		}
 	}
 
-	output = (cast(ubyte[])result.data).dup;
+	output = result.data.representation.dup;
 	return rlength;
 }
 
@@ -376,7 +381,7 @@ ptrdiff_t peek(Socket socket)
 }
 
 /// Convenience function for writing lines to $(D Appender)
-@safe void writeln(T, A...)(ref Appender!T output, A args)
+void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
 	{
@@ -386,7 +391,7 @@ ptrdiff_t peek(Socket socket)
 	output.put(HTTP_BREAK);
 }
 /// Convenience function for writing lines to $(D Socket)
-@safe auto writeln(A...)(Socket socket, A args)
+auto writeln(A...)(Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);
