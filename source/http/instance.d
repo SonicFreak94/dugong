@@ -54,7 +54,7 @@ protected:
 	ubyte[] body_;
 
 public:
-	this(Socket socket, bool hasBody = true, int keepAlive = 3, lazy Duration timeout = 5.seconds)
+	this(Socket socket, bool hasBody = true, int keepAlive = 5, lazy Duration timeout = 15.seconds)
 	{
 		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");

@@ -218,11 +218,6 @@ public:
 private:
 	bool handlePersistence()
 	{
-		scope (exit)
-		{
-			wait();
-		}
-
 		if (method == HttpMethod.connect)
 		{
 			if (checkRemote())
@@ -231,31 +226,38 @@ private:
 				return false;
 			}
 
+			wait();
 			return true;
 		}
 
-		immutable currHost = getHeader("Host");
-		clear();
+		// TODO: timeout
+		auto length = socket.peek(_fwd_peek);
 
-		scope (exit)
-		{
-			immutable newHost = getHeader("Host");
-			if (newHost != currHost)
-			{
-				closeRemote();
-			}
-		}
-
-		if (!receive() || !socket.peek(_fwd_peek))
+		if (!length)
 		{
 			disconnect();
 			return false;
 		}
 
-		if (!checkRemote())
+		immutable currHost = getHeader("Host");
+		clear();
+
+		if (!receive())
+		{
+			debug synchronized
+			{
+				import std.stdio : stderr;
+				stderr.writeln("Connection timed out.");
+			}
+
+			disconnect();
+			return false;
+		}
+
+		immutable newHost = getHeader("Host");
+		if (newHost != currHost || !checkRemote())
 		{
 			closeRemote();
-			return false;
 		}
 
 		return true;
