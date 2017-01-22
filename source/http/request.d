@@ -73,26 +73,26 @@ public:
 			}
 
 			established = isPersistent;
-			auto host = getHeader("Host");
 
+			// TODO: POST
 			switch (method) with (HttpMethod)
 			{
 				case none:
 					// just send a bad request and close the connection.
 					socket.sendBadRequest();
-					return;
+					disconnect();
+					continue;
 
 				case connect:
 					handleConnect();
 					break;
 
-					// TODO: POST
-					// TODO: OPTIONS
-
+				case options:
 				case get:
 				case head:
 					// Pull the host from the headers.
 					// If none is present, try to use the request URL.
+					immutable host = getHeader("Host");
 					auto i = host.lastIndexOf(":");
 
 					// TODO: proper URL parsing
@@ -129,7 +129,7 @@ public:
 
 					send(remote);
 
-					response = new HttpResponse(remote, method != head);
+					response = new HttpResponse(remote, method == get);
 					response.receive();
 					response.send(socket);
 
