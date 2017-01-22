@@ -230,10 +230,7 @@ private:
 			return true;
 		}
 
-		// TODO: timeout
-		auto length = socket.peek(_fwd_peek);
-
-		if (!length)
+		if (!socket.peek(_fwd_peek))
 		{
 			disconnect();
 			return false;
