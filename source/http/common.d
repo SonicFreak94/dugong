@@ -32,31 +32,32 @@ private ubyte[HTTP_BUFFLEN] _buffer;
 
 /// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
 /// Params:
-///		str = An $(D Appender!(char[])) to scan for a line.
-/// Returns: The line if found, else null.
-char[] getln(ref Appender!(char[]) str)
+///		str = An $(D Appender!(char[])) to scan until $(D pattern).
+/// 	pattern = Pattern to scan for.
+/// Returns: The data if found, else null.
+char[] get(ref Appender!(char[]) str, const char[] pattern)
 {
 	if (str.data.empty)
 	{
 		return null;
 	}
 
-	auto index = str.data.indexOf(HTTP_BREAK);
+	auto index = str.data.indexOf(pattern);
 	if (index < 0)
 	{
 		return null;
 	}
 
-	return str.data[0 .. index + HTTP_BREAK.length];
+	return str.data[0 .. index + pattern.length];
 }
 
 /// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
 /// data into the output $(D Appender!(char[])).
 /// Returns: The line if found, else null.
-char[] overflow(ref Appender!(char[]) input, ref Appender!(char[]) output)
+char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
-	auto result = input.getln();
+	auto result = input.get(pattern);
 
 	if (result.empty)
 	{
@@ -174,15 +175,24 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 	return result;
 }
 
-/// Attemps to read a whole line from a socket.
-ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
+/**
+	Reads from a socket until the specified pattern is found or the connection times out.
+
+	This is not ideal for data sets that are expected to be large as it buffers all of the
+	data until $(D pattern) is encountered.
+	
+	TODO: Refactor to take in a user provided buffer to rectify data buffering issues.
+
+	Returns: The number of bytes received (including the length of the pattern).
+*/
+ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow, out char[] output)
 {
 	Appender!(char[]) result;
 	char[] str;
 	ptrdiff_t index = -1;
 	ptrdiff_t length = -1;
 
-	if (overflow.data == HTTP_BREAK)
+	if (overflow.data == pattern)
 	{
 		overflow.clear();
 		return -1;
@@ -192,52 +202,63 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 	{
 		result.put(overflow.data);
 		overflow.clear();
-		str = result.overflow(overflow);
+		str = result.overflow(pattern, overflow);
 	}
 
-	if (str.empty)
+	void check()
 	{
-		if (socket is null || !socket.isAlive)
+		enforce(str.endsWith(pattern),   `Parse failed: output does not end with pattern.`);
+		enforce(str.count(pattern) == 1, `Parse failed: more than one pattern in output.`);
+		enforce(result.data.empty,       `Unhandled data still remains in the buffer.`);
+		output = str[0 .. $ - pattern.length];
+	}
+
+	if (!str.empty)
+	{
+		check();
+		return str.length;
+	}
+
+	if (socket is null || !socket.isAlive)
+	{
+		overflow.clear();
+		return 0;
+	}
+
+	enforce(!socket.blocking, "socket must be non-blocking");
+
+	while (index < 0 && socket.isAlive)
+	{
+		length = socket.receiveYield(_buffer);
+
+		if (!length || length == Socket.ERROR)
 		{
+			// maybe send?
 			overflow.clear();
-			return 0;
+			break;
 		}
 
-		enforce(!socket.blocking, "socket must be non-blocking");
+		index = (cast(char[])_buffer[0 .. length]).indexOf(pattern);
 
-		while (index < 0 && socket.isAlive)
+		if (index < 0)
 		{
-			length = socket.receiveYield(_buffer);
+			result.put(_buffer[0 .. length].dup);
+		}
+		else
+		{
+			auto i = index + pattern.length;
+			result.put(_buffer[0 .. i].dup);
 
-			if (!length || length == Socket.ERROR)
+			if (i < length)
 			{
-				// maybe send?
-				overflow.clear();
-				break;
+				overflow.put(_buffer[i .. length].dup);
 			}
+		}
 
-			index = (cast(char[])_buffer[0 .. length]).indexOf(HTTP_BREAK);
-
-			if (index < 0)
-			{
-				result.put(_buffer[0 .. length].dup);
-			}
-			else
-			{
-				auto i = index + HTTP_BREAK.length;
-				result.put(_buffer[0 .. i].dup);
-
-				if (i < length)
-				{
-					overflow.put(_buffer[i .. length].dup);
-				}
-			}
-
-			str = result.overflow(overflow);
-			if (!str.empty)
-			{
-				break;
-			}
+		str = result.overflow(pattern, overflow);
+		if (!str.empty)
+		{
+			break;
 		}
 	}
 
@@ -246,12 +267,22 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 		return length;
 	}
 
-	enforce(str.endsWith(HTTP_BREAK),   `Parse failed: output does not end with line break.`);
-	enforce(str.count(HTTP_BREAK) == 1, `Parse failed: more than one line break in output.`);
-	enforce(result.data.empty,          `Unhandled data still remains in the buffer.`);
-
-	output = str[0 .. $ - HTTP_BREAK.length];
+	check();
 	return str.length;
+}
+
+/**
+	Attemps to read a whole line from a socket.
+
+	Note that this buffers the data until an entire line is available, so
+	it should only be used on data sets that are expected to be small.
+
+	See_Also: readUntil
+	Returns: The number of bytes received (including the length of the line break).
+*/
+ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
+{
+	return readUntil(socket, HTTP_BREAK, overflow, output);
 }
 
 /// Read from the specified socket by line.
