@@ -21,6 +21,9 @@ private:
 	HttpMethod method;
 	string requestUrl;
 
+	ubyte[] _fwd_buffer;
+	ubyte[1] _fwd_peek;
+
 public:
 	/// Constructs an instance of $(D HttpRequest) using
 	/// the specified connected socket.
@@ -243,7 +246,7 @@ private:
 			}
 		}
 
-		if (!receive() || !socket.peek())
+		if (!receive() || !socket.peek(_fwd_peek))
 		{
 			disconnect();
 			return false;
@@ -274,13 +277,18 @@ private:
 	}
 	bool checkRemote()
 	{
-		return remote !is null && remote.isAlive && remote.peek() != 0;
+		return remote !is null && remote.isAlive && remote.peek(_fwd_peek) != 0;
 	}
 
 	void handleConnect()
 	{
 		if (!checkRemote())
 		{
+			if (_fwd_buffer is null)
+			{
+				_fwd_buffer = new ubyte[HTTP_BUFFLEN];
+			}
+
 			try
 			{
 				auto address = requestUrl.split(':');
@@ -322,21 +330,19 @@ private:
 			return -1;
 		}
 
-		ubyte[1024] buffer;
-
 		ptrdiff_t result, length;
 
-		length = from.receiveYield(buffer);
+		length = from.receiveYield(_fwd_buffer);
 		result = length;
 
 		if (length > 0)
 		{
-			to.sendYield(buffer[0 .. length]);
+			to.sendYield(_fwd_buffer[0 .. length]);
 		}
 
-		while (length == buffer.length)
+		while (length == _fwd_buffer.length)
 		{
-			length = from.receiveYield(buffer);
+			length = from.receiveYield(_fwd_buffer);
 
 			if (length < 1)
 			{
@@ -345,7 +351,7 @@ private:
 
 			if (length > 0)
 			{
-				to.sendYield(buffer[0 .. length]);
+				to.sendYield(_fwd_buffer[0 .. length]);
 				result += length;
 			}
 		}
@@ -366,37 +372,32 @@ private:
 			return;
 		}
 
-		auto t = new Thread(
+		auto length = remote.peek(_fwd_peek);
+		if (!length)
 		{
-			auto sch = new FiberScheduler();
-			sch.spawn(
-			{
-				while (forward(remote, socket) > 0)
-				{
-					Thread.sleep(1.msecs);
-				}
+			closeRemote();
+			return;
+		}
+		else if (length > 0)
+		{
+			forward(remote, socket);
+		}
+		else
+		{
+			wait();
+		}
 
-				closeRemote();
-			});
-
-			sch.start(
-			{
-				while (checkRemote())
-				{
-					if (!forward(socket, remote))
-					{
-						disconnect();
-						break;
-					}
-
-					Thread.sleep(1.msecs);
-				}
-			});
-		});
-
-		t.start();
-
-		while (t.isRunning)
+		length = socket.peek(_fwd_peek);
+		if (!length)
+		{
+			disconnect();
+			return;
+		}
+		else if (length > 0)
+		{
+			forward(socket, remote);
+		}
+		else
 		{
 			wait();
 		}

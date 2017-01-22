@@ -25,8 +25,10 @@ void wait()
 
 /// Represents an HTTP EOL
 private const enum HTTP_BREAK = "\r\n";
-/// Receive buffer size
-private const enum HTTP_BUFFLEN = 4096;
+/// Receive buffer size (1MiB)
+const enum HTTP_BUFFLEN = 1 * 1024 * 1024;
+/// (thread-local) static buffer for receiving data.
+private ubyte[HTTP_BUFFLEN] _buffer;
 
 /// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
 /// Params:
@@ -175,7 +177,6 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 /// Attemps to read a whole line from a socket.
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
-	auto buffer = new char[HTTP_BUFFLEN];
 	Appender!(char[]) result;
 	char[] str;
 	ptrdiff_t index = -1;
@@ -202,11 +203,11 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 			return 0;
 		}
 
-		enforce(!socket.blocking, "socket must not be blocking");
+		enforce(!socket.blocking, "socket must be non-blocking");
 
 		while (index < 0 && socket.isAlive)
 		{
-			length = socket.receiveYield(buffer);
+			length = socket.receiveYield(_buffer);
 
 			if (!length || length == Socket.ERROR)
 			{
@@ -215,20 +216,20 @@ ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] outpu
 				break;
 			}
 
-			index = buffer.indexOf(HTTP_BREAK);
+			index = (cast(char[])_buffer[0 .. length]).indexOf(HTTP_BREAK);
 
 			if (index < 0)
 			{
-				result.put(buffer[0 .. length]);
+				result.put(_buffer[0 .. length].dup);
 			}
 			else
 			{
 				auto i = index + HTTP_BREAK.length;
-				result.put(buffer[0 .. i]);
+				result.put(_buffer[0 .. i].dup);
 
 				if (i < length)
 				{
-					overflow.put(buffer[i .. length]);
+					overflow.put(_buffer[i .. length].dup);
 				}
 			}
 
@@ -270,7 +271,6 @@ Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
 	ptrdiff_t result;
-	auto buffer = new ubyte[HTTP_BUFFLEN];
 
 	auto arr = overflow.data[0 .. min($, target)].representation.dup;
 	yield(arr);
@@ -290,7 +290,7 @@ ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t tar
 
 	while (result < target)
 	{
-		auto length = socket.receiveYield(buffer);
+		auto length = socket.receiveYield(_buffer);
 
 		if (!length || length == Socket.ERROR)
 		{
@@ -300,13 +300,13 @@ ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t tar
 		}
 
 		auto remainder = target - result;
-		arr = buffer[0 .. min(length, remainder)].dup;
+		arr = _buffer[0 .. min(length, remainder)].dup;
 		result += arr.length;
 		yield(arr);
 
 		if (remainder < length)
 		{
-			overflow.put(buffer[remainder .. length].dup);
+			overflow.put(_buffer[remainder .. length].dup);
 		}
 	}
 
@@ -372,12 +372,6 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 ptrdiff_t peek(Socket socket, void[] buffer)
 {
 	return socket.receive(buffer, SocketFlags.PEEK);
-}
-/// Ditto
-ptrdiff_t peek(Socket socket)
-{
-	auto buffer = new ubyte[HTTP_BUFFLEN];
-	return peek(socket, buffer);
 }
 
 /// Convenience function for writing lines to $(D Appender)
