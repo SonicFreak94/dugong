@@ -89,7 +89,10 @@ public:
 				case options:
 				case get:
 				case head:
-					connectRemote();
+					if (!connectRemote())
+					{
+						break;
+					}
 
 					send(remote);
 					
@@ -369,11 +372,11 @@ private:
 	{
 		return remote !is null && remote.isAlive && remote.peek(_fwd_peek) != 0;
 	}
-	void connectRemote()
+	bool connectRemote()
 	{
 		if (checkRemote())
 		{
-			return;
+			return true;
 		}
 
 		// Pull the host from the headers.
@@ -401,12 +404,14 @@ private:
 		try
 		{
 			remote = new HttpSocket(address, port);
+			return true;
 		}
 		catch (Exception)
 		{
 			socket.sendNotFound();
 			clear();
 			closeRemote();
+			return false;
 		}
 	}
 }
