@@ -47,7 +47,6 @@ private:
 
 protected:
 	Socket socket;
-
 	Appender!(char[]) overflow;
 	HttpVersion version_;
 	string[string] headers;

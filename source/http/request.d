@@ -74,7 +74,6 @@ public:
 
 			established = isPersistent;
 
-			// TODO: POST
 			switch (method) with (HttpMethod)
 			{
 				case none:
@@ -90,45 +89,10 @@ public:
 				case options:
 				case get:
 				case head:
-					// Pull the host from the headers.
-					// If none is present, try to use the request URL.
-					immutable host = getHeader("Host");
-					auto i = host.lastIndexOf(":");
-
-					// TODO: proper URL parsing
-					string address;
-					ushort port;
-
-					if (i >= 0)
-					{
-						address = host[0 .. i];
-						port = to!ushort(host[++i .. $]);
-					}
-					else
-					{
-						address = host;
-						port = 80;
-					}
-
-					if (!checkRemote())
-					{
-						closeRemote();
-
-						try
-						{
-							remote = new HttpSocket(address, port);
-						}
-						catch (Exception)
-						{
-							socket.sendNotFound();
-							clear();
-							closeRemote();
-							break;
-						}
-					}
+					connectRemote();
 
 					send(remote);
-
+					
 					response = new HttpResponse(remote, method == get);
 					response.receive();
 					response.send(socket);
@@ -137,6 +101,10 @@ public:
 					{
 						closeRemote();
 					}
+					break;
+
+				case post:
+					// TODO
 					break;
 
 				default:
@@ -260,25 +228,6 @@ private:
 		return true;
 	}
 
-	void closeRemote()
-	{
-		if (response !is null)
-		{
-			response.disconnect();
-			response = null;
-		}
-
-		if (remote !is null)
-		{
-			remote.disconnect();
-			remote = null;
-		}
-	}
-	bool checkRemote()
-	{
-		return remote !is null && remote.isAlive && remote.peek(_fwd_peek) != 0;
-	}
-
 	void handleConnect()
 	{
 		if (!checkRemote())
@@ -399,6 +348,65 @@ private:
 		else
 		{
 			wait();
+		}
+	}
+
+	void closeRemote()
+	{
+		if (response !is null)
+		{
+			response.disconnect();
+			response = null;
+		}
+
+		if (remote !is null)
+		{
+			remote.disconnect();
+			remote = null;
+		}
+	}
+	bool checkRemote()
+	{
+		return remote !is null && remote.isAlive && remote.peek(_fwd_peek) != 0;
+	}
+	void connectRemote()
+	{
+		if (checkRemote())
+		{
+			return;
+		}
+
+		// Pull the host from the headers.
+		// If none is present, try to use the request URL.
+		immutable host = getHeader("Host");
+		auto i = host.lastIndexOf(":");
+
+		// TODO: proper URL parsing
+		string address;
+		ushort port;
+
+		if (i >= 0)
+		{
+			address = host[0 .. i];
+			port = to!ushort(host[++i .. $]);
+		}
+		else
+		{
+			address = host;
+			port = 80;
+		}
+
+		closeRemote();
+
+		try
+		{
+			remote = new HttpSocket(address, port);
+		}
+		catch (Exception)
+		{
+			socket.sendNotFound();
+			clear();
+			closeRemote();
 		}
 	}
 }
