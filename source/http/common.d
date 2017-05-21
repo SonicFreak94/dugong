@@ -207,9 +207,9 @@ ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) o
 
 	void check()
 	{
-		enforce(str.endsWith(pattern),   `Parse failed: output does not end with pattern.`);
-		enforce(str.count(pattern) == 1, `Parse failed: more than one pattern in output.`);
-		enforce(result.data.empty,       `Unhandled data still remains in the buffer.`);
+		enforce(str.endsWith(pattern),   "Parse failed: output does not end with pattern.");
+		enforce(str.count(pattern) == 1, "Parse failed: more than one pattern in output.");
+		enforce(result.data.empty,       "Unhandled data still remains in the buffer.");
 		output = str[0 .. $ - pattern.length];
 	}
 
