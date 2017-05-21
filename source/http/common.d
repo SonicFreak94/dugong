@@ -13,6 +13,7 @@ import std.exception;
 import std.range;
 import std.string;
 
+// TODO: make all socket methods part of a derived socket type to reduce allocations
 // TODO: use a range (or even array) instead of appender for overflow buffers
 // TODO: consider uninitializedArray for local buffers
 

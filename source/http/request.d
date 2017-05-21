@@ -183,6 +183,7 @@ public:
 			import std.stdio : stderr;
 			stderr.writeln(toString());
 		}
+
 		return true;
 	}
 
@@ -191,13 +192,26 @@ private:
 	{
 		if (method == HttpMethod.connect)
 		{
+			scope (exit) wait();
+
+			if (!socket.peek(_fwd_peek))
+			{
+				debug synchronized
+				{
+					import std.stdio : stderr;
+					stderr.writeln("Client closed connection.");
+				}
+
+				disconnect();
+				return false;
+			}
+
 			if (checkRemote())
 			{
 				handleConnect();
 				return false;
 			}
 
-			wait();
 			return true;
 		}
 
