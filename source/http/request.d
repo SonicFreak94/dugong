@@ -55,7 +55,7 @@ public:
 
 		while (connected)
 		{
-			wait();
+			yield();
 
 			if (established)
 			{
@@ -153,7 +153,7 @@ public:
 
 		if (line.empty)
 		{
-			wait();
+			yield();
 			return false;
 		}
 
@@ -194,7 +194,7 @@ private:
 				debug synchronized
 				{
 					import std.stdio : stderr;
-					stderr.writeln("Client closed connection.");
+					stderr.writeln("Client connection closed.");
 				}
 
 				disconnect();
@@ -224,7 +224,7 @@ private:
 			debug synchronized
 			{
 				import std.stdio : stderr;
-				stderr.writeln("Connection timed out.");
+				stderr.writeln("Client connection closed.");
 			}
 
 			disconnect();
@@ -344,7 +344,7 @@ private:
 		}
 		else
 		{
-			wait();
+			yield();
 		}
 
 		length = socket.peek(_fwd_peek);
@@ -359,7 +359,7 @@ private:
 		}
 		else
 		{
-			wait();
+			yield();
 		}
 	}
 

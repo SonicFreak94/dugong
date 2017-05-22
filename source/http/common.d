@@ -19,11 +19,11 @@ import window;
 // TODO: use a range (or even array) instead of appender for overflow buffers
 // TODO: consider uninitializedArray for local buffers
 
-/// Sleeps the thread and then yields.
+/// Yields and then sleeps the current thread.
 void wait()
 {
-	Thread.sleep(1.msecs);
 	yield();
+	Thread.sleep(1.msecs);
 }
 
 /// Represents an HTTP EOL
@@ -98,15 +98,15 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 	{
 		length = socket.receive(buffer);
 
-		if (length == Socket.ERROR)
+		if (!length || length == Socket.ERROR)
 		{
 			if (!wouldHaveBlocked())
 			{
 				return 0;
 			}
-
-			wait();
 		}
+
+		yield();
 	} while (length < 1 && MonoTime.currTime - start < timeout);
 
 	return length;
@@ -535,7 +535,7 @@ ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t tar
 {
 	ptrdiff_t result;
 
-	auto arr = overflow.data[0 .. min($, target)].representation.dup;
+	auto arr = overflow.data[0 .. min($, target)].representation;
 	yield(arr);
 	result += arr.length;
 
@@ -608,7 +608,7 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 			continue;
 		}
 
-		yield((line ~ HTTP_BREAK).representation.dup);
+		yield((line ~ HTTP_BREAK).representation);
 		result.writeln(line);
 
 		auto length = to!ptrdiff_t(line, 16);
@@ -631,7 +631,7 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 		for (char[] line; (rlength = socket.readln(overflow, line)) > 0;)
 		{
 			result.writeln(line);
-			yield((line ~ HTTP_BREAK).representation.dup);
+			yield((line ~ HTTP_BREAK).representation);
 		}
 	}
 
@@ -652,7 +652,19 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 */
 ptrdiff_t peek(Socket socket, void[] buffer)
 {
-	return socket.receive(buffer, SocketFlags.PEEK);
+	auto result = socket.receive(buffer, SocketFlags.PEEK);
+
+	if (!result)
+	{
+		return 0;
+	}
+
+	if (result > 0 || wouldHaveBlocked())
+	{
+		return result;
+	}
+
+	return 0;
 }
 
 /**
