@@ -412,7 +412,26 @@ private:
 
 		try
 		{
-			remote = new HttpSocket(address, port);
+			try
+			{
+				remote = new HttpSocket(address, port);
+			}
+			catch (Exception ex)
+			{
+				try
+				{
+					clear();
+					socket.sendNotFound();
+					closeRemote();
+				}
+				catch (Exception)
+				{
+					// ignored
+				}
+
+				return false;
+			}
+
 			return true;
 		}
 		catch (Exception)

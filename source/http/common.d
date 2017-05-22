@@ -104,9 +104,9 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 			{
 				return 0;
 			}
-		}
 
-		yield();
+			yield();
+		}
 	} while (length < 1 && MonoTime.currTime - start < timeout);
 
 	return length;
@@ -142,20 +142,20 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 	{
 		sent = socket.send(buffer[result .. $]);
 
-		if (sent == Socket.ERROR)
+		if (!sent || sent == Socket.ERROR)
 		{
 			if (!wouldHaveBlocked())
 			{
 				return 0;
 			}
+
+			yield();
 		}
-		else if (sent > 0)
+		else
 		{
 			result += sent;
 			start = MonoTime.currTime;
 		}
-
-		wait();
 	} while (socket.isAlive && result < buffer.length && sent < 1 && MonoTime.currTime - start < timeout);
 
 	return result;
