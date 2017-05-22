@@ -187,7 +187,8 @@ char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!
 
 	Returns: The number of bytes received (including the length of the pattern).
 */
-ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow, out char[] output, bool overflowPattern = false)
+ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow,
+		out char[] output, bool overflowPattern = false)
 {
 	Appender!(char[]) result;
 	char[] str;

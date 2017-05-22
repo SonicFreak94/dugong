@@ -15,8 +15,8 @@ import std.uni : sicmp;
 
 import http.common;
 import http.enums;
-import http.response;
 import http.multipart;
+import http.response;
 
 /// Interface for HTTP instances.
 interface IHttpInstance
