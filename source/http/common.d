@@ -562,7 +562,7 @@ ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t tar
 		}
 
 		auto remainder = target - result;
-		arr = _buffer[0 .. min(length, remainder)].dup;
+		arr = _buffer[0 .. min(length, remainder)];
 		result += arr.length;
 		yield(arr);
 
