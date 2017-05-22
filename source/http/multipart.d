@@ -23,13 +23,6 @@ public:
 	// HACK: overflow is for the receiving socket, NOT s
 	void send(Socket s, ref Appender!(char[]) overflow)
 	{
-		/*
-			TODO:
-				- get starting boundary(?)
-				- get all data until next boundary
-				- for each boundary, check if closing boundary
-		*/
-
 		immutable start = "--" ~ boundary;
 		immutable end = start ~ "--";
 
@@ -66,15 +59,10 @@ public:
 				_headers[key] = line.idup;
 			}
 
-			char[] data;
-
-			// TODO: send in chunks! This loads entire files into memory before forwarding to the server!
-			if (socket.readUntil(start, overflow, data, true) < 1)
+			foreach (ubyte[] buffer; socket.byBlockUntil(start, overflow, true))
 			{
-				break;
+				s.sendYield(buffer);
 			}
-			
-			s.sendYield(data);
 		}
 	}
 

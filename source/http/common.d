@@ -13,6 +13,8 @@ import std.exception;
 import std.range;
 import std.string;
 
+import window;
+
 // TODO: make all socket methods part of a derived socket type to reduce allocations
 // TODO: use a range (or even array) instead of appender for overflow buffers
 // TODO: consider uninitializedArray for local buffers
@@ -31,7 +33,13 @@ const enum HTTP_BUFFLEN = 1 * 1024 * 1024;
 /// (thread-local) static buffer for receiving data.
 private ubyte[HTTP_BUFFLEN] _buffer;
 
-/// Calls $(D shutdown(SocketShutdown.BOTH)) on $(D socket) before closing it.
+/**
+	Calls `Socket.shutdown` with the parameter `SocketShutdown.BOTH` on the specified
+	socket and closes the socket.
+
+	Params:
+		socket = The socket to disconnect.
+*/
 void disconnect(Socket socket)
 {
 	if (socket !is null)
@@ -41,6 +49,14 @@ void disconnect(Socket socket)
 	}
 }
 
+/**
+	Sets send/receive timeouts on the specified socket.
+
+	Params:
+		socket    = The socket whose timeouts are to be set.
+		keepAlive = Keep-alive time.
+		timeout   = The send/receive timeout.
+*/
 void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
 {
 	if (socket !is null)
@@ -51,8 +67,19 @@ void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
 	}
 }
 
-/// Same as $(D Socket.receive), but for non-blocking sockets. Calls $(D yield) until 
-/// there is data to be received. The connection will time out just like a blocking socket.
+/**
+	Pseudo-blocking version of `Socket.receive` for non-blocking
+	sockets which calls `yield` until data has been received or
+	the connection is terminated.
+
+	Params:
+		socket = The socket to read from.
+		buffer = Output buffer to store the received data.
+
+	Returns:
+		The number of bytes read, `0` if the connection has been closed,
+		or `Socket.ERROR` on failure.
+*/
 ptrdiff_t receiveYield(Socket socket, void[] buffer)
 {
 	if (socket is null || !socket.isAlive)
@@ -85,8 +112,19 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 	return length;
 }
 
-/// Same as $(D Socket.send), but for non-blocking sockets. Calls $(D yield) every
-/// loop until the data is fully sent, or until the connection times out.
+/**
+	Pseudo-blocking version of `Socket.send` for non-blocking
+	sockets which calls `yield` until data has been sent or
+	the connection is terminated.
+
+	Params:
+		socket = The socket to write to.
+		buffer = The buffer to write to the socket.
+
+	Returns:
+		The number of bytes read, `0` if the connection has been closed,
+		or `Socket.ERROR` on failure.
+*/
 ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 {
 	if (socket is null || !socket.isAlive)
@@ -145,9 +183,18 @@ char[] get(ref Appender!(char[]) str, const char[] pattern)
 	return str.data[0 .. index + pattern.length];
 }
 
-/// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
-/// data into the output $(D Appender!(char[])).
-/// Returns: The line if found, else null.
+/**
+	Searches for a $(PARAM pattern)-delimited block of data in $(PARAM input)
+	and returns it. Excess data is placed in $(PARAM output).
+
+	Params:
+		input = The buffer to search in.
+		pattern = The block delimiter.
+		output = Overflow buffer for excess data.
+
+	Returns:
+		The block of data if found, else `null`.
+*/
 char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
@@ -177,15 +224,169 @@ char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!
 	return result;
 }
 
+ptrdiff_t readBlockUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow,
+	bool overflowPattern = false)
+{
+	ptrdiff_t result;
+
+	if (overflow.data == pattern)
+	{
+		overflow.clear();
+		return -1;
+	}
+
+	auto window = SearchWindow!char(pattern.length);
+	Appender!(char[]) _wbuffer;
+
+	if (!overflow.data.empty)
+	{
+		size_t end;
+		bool match;
+
+		foreach (size_t i, char c; overflow.data)
+		{
+			end = i + 1;
+			window.put(c, _wbuffer);
+
+			if (window.match(pattern))
+			{
+				match = true;
+				break;
+			}
+		}
+
+		if (overflow.data.length <= pattern.length)
+		{
+			overflow.clear();
+		}
+		else
+		{
+			if (!_wbuffer.data.empty)
+			{
+				yield(cast(ubyte[])_wbuffer.data);
+				result = _wbuffer.data.length;
+				_wbuffer.clear();
+			}
+
+			if (end == overflow.data.length)
+			{
+				overflow.clear();
+
+				if (match && overflowPattern)
+				{
+					overflow.put(pattern);
+				}
+			}
+			else
+			{
+				auto remainder = overflow.data[end .. $].dup;
+				overflow.clear();
+
+				if (match && overflowPattern)
+				{
+					overflow.put(pattern);
+				}
+
+				overflow.put(remainder);
+			}
+		}
+
+		if (match)
+		{
+			return result + window.length;
+		}
+	}
+
+	if (socket is null || !socket.isAlive)
+	{
+		overflow.clear();
+		return 0;
+	}
+
+	enforce(!socket.blocking, "socket must be non-blocking");
+
+	while (!window.match(pattern) && socket.isAlive)
+	{
+		auto length = socket.receiveYield(_buffer);
+
+		if (!length || length == Socket.ERROR)
+		{
+			overflow.clear();
+			result = -1;
+			break;
+		}
+
+		_wbuffer.clear();
+
+		size_t end;
+		bool match;
+
+		foreach (size_t i, ubyte b; _buffer[0 .. length])
+		{
+			end = i + 1;
+			window.put(cast(char)b, _wbuffer);
+
+			if (window.match(pattern))
+			{
+				match = true;
+				break;
+			}
+		}
+
+		if (!_wbuffer.data.empty)
+		{
+			yield(cast(ubyte[])_wbuffer.data);
+			result += _wbuffer.data.length;
+		}
+
+		if (match)
+		{
+			result += window.length;
+
+			if (overflowPattern)
+			{
+				overflow.put(pattern);
+			}
+
+			if (end < length)
+			{
+				overflow.put(_buffer[end .. $].dup);
+			}
+		}
+	}
+
+	return result;
+}
+
+Generator!(ubyte[]) byBlockUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow,
+	bool overflowPattern = false)
+{
+	return new Generator!(ubyte[])(
+	{
+		socket.readBlockUntil(pattern, overflow, overflowPattern);
+	});
+}
+
 /**
 	Reads from a socket until the specified pattern is found or the connection times out.
 
 	This is not ideal for data sets that are expected to be large as it buffers all of the
-	data until $(D pattern) is encountered.
+	data until $(PARAM pattern) is encountered.
 	
 	TODO: Refactor to take in a user provided buffer to rectify data buffering issues.
 
-	Returns: The number of bytes received (including the length of the pattern).
+	Params:
+		socket          = The socket to read from.
+		pattern         = The pattern to search for.
+		overflow        = Overflow buffer to store excess data.
+		output          = A buffer to store the data.
+		overflowPattern =
+			If `true`, put the pattern in the overflow buffer
+			instead of discarding it.
+
+	Returns:
+		The number of bytes read (including the length of the pattern),
+		`0` if the connection has been closed, or `Socket.ERROR` on failure.
 */
 ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow,
 		out char[] output, bool overflowPattern = false)
@@ -280,15 +481,32 @@ ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) o
 	Note that this buffers the data until an entire line is available, so
 	it should only be used on data sets that are expected to be small.
 
+	Params:
+		socket   = The socket to read from.
+		overflow = Overflow buffer to store excess data.
+		output   = An output buffer to store the line.
+
+	Returns:
+		The number of bytes read (including the length of the line break),
+		`0` if the connection has been closed, or `Socket.ERROR` on failure.
+
 	See_Also: readUntil
-	Returns: The number of bytes received (including the length of the line break).
 */
 ptrdiff_t readln(Socket socket, ref Appender!(char[]) overflow, out char[] output)
 {
 	return readUntil(socket, HTTP_BREAK, overflow, output);
 }
 
-/// Read from the specified socket by line.
+/**
+	Reads and yields each line from the socket as they become available.
+
+	Params:
+		socket   = The socket to read from.
+		overflow = Overflow buffer to store excess data.
+
+	Returns:
+		`Generator!(char[])`
+*/
 Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 {
 	return new Generator!(char[])(
@@ -300,8 +518,19 @@ Generator!(char[]) byLine(Socket socket, ref Appender!(char[]) overflow)
 	});
 }
 
-/// Attempts to read a specified number of bytes from a socket.
-/// Yields each block of data as it is redeived until the target size is reached.
+/**
+	Attempts to read a specified number of bytes from a socket and yields
+	each block of data as it is received until the target size is reached.
+
+	Params:
+		socket   = The socket to read from.
+		overflow = Overflow buffer for excess data.
+		target   = The target chunk size.
+
+	Returns:
+		The number of bytes read, `0` if the connection has been closed,
+		or `Socket.ERROR` on failure.
+*/
 ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t target)
 {
 	ptrdiff_t result;
@@ -328,7 +557,6 @@ ptrdiff_t readBlock(Socket socket, ref Appender!(char[]) overflow, ptrdiff_t tar
 
 		if (!length || length == Socket.ERROR)
 		{
-			// maybe send?
 			overflow.clear();
 			return length;
 		}
@@ -356,9 +584,18 @@ Generator!(ubyte[]) byBlock(Socket socket, ref Appender!(char[]) overflow, ptrdi
 	});
 }
 
-/// Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
-/// Returns: The number of bytes actually received, $(D 0) if the remote side
-/// has closed the connection, or $(D Socket.ERROR) on failure.
+/**
+	Reads a "Transfer-Encoding: chunked" body from a $(D Socket).
+
+	Params:
+		socket   = The socket to read from.
+		overflow = Overflow buffer for excess data.
+		output   = A buffer to store the chunk.
+
+	Returns:
+		The number of bytes read, `0` if the connection has been closed,
+		or `Socket.ERROR` on failure.
+*/
 ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] output)
 {
 	Appender!(char[]) result;
@@ -402,13 +639,29 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 	return rlength;
 }
 
-/// Peek at incoming data on the specified socket.
+/**
+	Peek at incoming data on the specified `Socket`.
+
+	Params:
+		socket = The socket to read from.
+		buffer = The buffer to store the peeked data.
+
+	Returns:
+		The number of bytes read, `0` if the connection has been closed,
+		or `Socket.ERROR` on failure.
+*/
 ptrdiff_t peek(Socket socket, void[] buffer)
 {
 	return socket.receive(buffer, SocketFlags.PEEK);
 }
 
-/// Convenience function for writing lines to $(D Appender)
+/**
+	Convenience function for writing lines to `Appender`
+	
+	Params:
+		output = The appender to write the line to.
+		args = Arguments to add to the line.`
+*/
 void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
@@ -418,7 +671,13 @@ void writeln(T, A...)(ref Appender!T output, A args)
 
 	output.put(HTTP_BREAK);
 }
-/// Convenience function for writing lines to $(D Socket)
+/**
+	Convenience function for writing lines to a `Socket``
+
+	Params:
+		socket = The socket to write the line to.
+		args = Arguments to add to the line.
+*/
 auto writeln(A...)(Socket socket, A args)
 {
 	Appender!string builder;
