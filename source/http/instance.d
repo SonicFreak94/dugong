@@ -16,6 +16,7 @@ import std.uni : sicmp;
 import http.common;
 import http.enums;
 import http.response;
+import http.multipart;
 
 /// Interface for HTTP instances.
 interface IHttpInstance
@@ -83,7 +84,7 @@ public:
 
 	void send(Socket s)
 	{
-		// This toString() is implemented by the inheriting class.
+		// This toString() is implemented by the derived class.
 		s.sendYield(toString());
 
 		if (!body_.empty)
@@ -92,7 +93,6 @@ public:
 			return;
 		}
 
-		// TODO: multi-part
 		// TODO: connection abort
 
 		if (isChunked)
@@ -104,9 +104,17 @@ public:
 					break;
 				}
 			}
+
+			return;
 		}
-		else if (hasBody)
+
+		void sendBody()
 		{
+			if (!hasBody)
+			{
+				return;
+			}
+
 			foreach (block; byBlock())
 			{
 				if (s.sendYield(block) < 1)
@@ -115,6 +123,31 @@ public:
 				}
 			}
 		}
+
+		auto contentType = getHeader("Content-Type").idup;
+		if (!contentType.toLower().canFind("multipart"))
+		{
+			sendBody();
+			return;
+		}
+
+		contentType.munch(" ");
+		contentType.munch("^ ");
+		contentType.munch(" ");
+
+		immutable boundaryParam = contentType.munch("^=");
+		contentType.munch(" =");
+
+		if (boundaryParam.sicmp("boundary") != 0)
+		{
+			sendBody();
+			return;
+		}
+
+		immutable boundary = contentType.munch("^ ;");
+
+		auto multipart = new HttpMultiPart(socket, boundary);
+		multipart.send(s, overflow);
 	}
 
 	void send()

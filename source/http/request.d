@@ -55,6 +55,8 @@ public:
 
 		while (connected)
 		{
+			wait();
+
 			if (established)
 			{
 				if (!handlePersistence())
@@ -89,13 +91,14 @@ public:
 				case options:
 				case get:
 				case head:
+				case post:
 					if (!connectRemote())
 					{
 						break;
 					}
 
 					send(remote);
-					
+
 					response = new HttpResponse(remote, method == get);
 					response.receive();
 					response.send(socket);
@@ -104,10 +107,6 @@ public:
 					{
 						closeRemote();
 					}
-					break;
-
-				case post:
-					// TODO
 					break;
 
 				default:
@@ -123,8 +122,6 @@ public:
 			{
 				break;
 			}
-
-			wait();
 		}
 	}
 
@@ -192,8 +189,6 @@ private:
 	{
 		if (method == HttpMethod.connect)
 		{
-			scope (exit) wait();
-
 			if (!socket.peek(_fwd_peek))
 			{
 				debug synchronized

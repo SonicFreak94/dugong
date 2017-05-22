@@ -6,14 +6,12 @@ import std.string;
 
 import http.common;
 
-///
+/// Handles multipart POST data from clients.
 class HttpMultiPart
 {
 private:
-	Appender!(char[]) overflow;
 	Socket socket;
 	string boundary;
-	string[string] headers;
 
 public:
 	this(Socket socket, in string boundary)
@@ -22,24 +20,8 @@ public:
 		this.boundary = boundary;
 	}
 
-	bool receive()
-	{
-		foreach (line; socket.byLine(overflow))
-		{
-			if (line.empty)
-			{
-				break;
-			}
-
-			auto key = line.munch("^:").idup;
-			line.munch(": ");
-			headers[key] = line.idup;
-		}
-
-		return !!headers.length;
-	}
-
-	void send(Socket s)
+	// HACK: overflow is for the receiving socket, NOT s
+	void send(Socket s, ref Appender!(char[]) overflow)
 	{
 		/*
 			TODO:
@@ -53,7 +35,6 @@ public:
 
 		while (true)
 		{
-			string[string] _headers;
 			char[] _boundary;
 
 			if (socket.readln(overflow, _boundary) < 1)
@@ -61,13 +42,15 @@ public:
 				break;
 			}
 
-			enforce(_boundary.startsWith(start));
+			enforce(_boundary.startsWith(start), "Malformed multipart line: boundary not found");
 			s.writeln(_boundary);
 
 			if (_boundary == end)
 			{
 				break;
 			}
+
+			string[string] _headers;
 
 			foreach (line; socket.byLine(overflow))
 			{
@@ -84,7 +67,9 @@ public:
 			}
 
 			char[] data;
-			if (socket.readUntil(start, overflow, data) < 1)
+
+			// TODO: send in chunks! This loads entire files into memory before forwarding to the server!
+			if (socket.readUntil(start, overflow, data, true) < 1)
 			{
 				break;
 			}
@@ -93,8 +78,8 @@ public:
 		}
 	}
 
-	void send()
+	void send(ref Appender!(char[]) overflow)
 	{
-		send(socket);
+		send(socket, overflow);
 	}
 }

@@ -31,59 +31,6 @@ const enum HTTP_BUFFLEN = 1 * 1024 * 1024;
 /// (thread-local) static buffer for receiving data.
 private ubyte[HTTP_BUFFLEN] _buffer;
 
-/// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
-/// Params:
-///		str = An $(D Appender!(char[])) to scan until $(D pattern).
-/// 	pattern = Pattern to scan for.
-/// Returns: The data if found, else null.
-char[] get(ref Appender!(char[]) str, const char[] pattern)
-{
-	if (str.data.empty)
-	{
-		return null;
-	}
-
-	auto index = str.data.indexOf(pattern);
-	if (index < 0)
-	{
-		return null;
-	}
-
-	return str.data[0 .. index + pattern.length];
-}
-
-/// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
-/// data into the output $(D Appender!(char[])).
-/// Returns: The line if found, else null.
-char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
-{
-	enforce(input !is output, "input and output must be different!");
-	auto result = input.get(pattern);
-
-	if (result.empty)
-	{
-		return null;
-	}
-
-	const remainder = input.data.length - result.length;
-
-	if (remainder > 0)
-	{
-		auto index = result.length;
-		if (index < input.data.length)
-		{
-			output.put(input.data[index .. $]);
-			input.clear();
-		}
-	}
-	else
-	{
-		input.clear();
-	}
-
-	return result;
-}
-
 /// Calls $(D shutdown(SocketShutdown.BOTH)) on $(D socket) before closing it.
 void disconnect(Socket socket)
 {
@@ -176,6 +123,60 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 	return result;
 }
 
+/// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
+/// Params:
+///		str = An $(D Appender!(char[])) to scan until $(D pattern).
+/// 	pattern = Pattern to scan for.
+/// Returns: The data if found, else null.
+char[] get(ref Appender!(char[]) str, const char[] pattern)
+{
+	if (str.data.empty)
+	{
+		return null;
+	}
+
+	auto index = str.data.indexOf(pattern);
+
+	if (index < 0)
+	{
+		return null;
+	}
+
+	return str.data[0 .. index + pattern.length];
+}
+
+/// Pulls a whole line out of the input $(D Appender!(char[])) if possible, and puts remaining
+/// data into the output $(D Appender!(char[])).
+/// Returns: The line if found, else null.
+char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
+{
+	enforce(input !is output, "input and output must be different!");
+	auto result = input.get(pattern);
+
+	if (result.empty)
+	{
+		return null;
+	}
+
+	const remainder = input.data.length - result.length;
+
+	if (remainder > 0)
+	{
+		auto index = result.length;
+		if (index < input.data.length)
+		{
+			output.put(input.data[index .. $]);
+			input.clear();
+		}
+	}
+	else
+	{
+		input.clear();
+	}
+
+	return result;
+}
+
 /**
 	Reads from a socket until the specified pattern is found or the connection times out.
 
@@ -186,7 +187,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 
 	Returns: The number of bytes received (including the length of the pattern).
 */
-ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow, out char[] output)
+ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) overflow, out char[] output, bool overflowPattern = false)
 {
 	Appender!(char[]) result;
 	char[] str;
@@ -252,7 +253,7 @@ ptrdiff_t readUntil(Socket socket, const char[] pattern, ref Appender!(char[]) o
 
 			if (i < length)
 			{
-				overflow.put(_buffer[i .. length].dup);
+				overflow.put(_buffer[(overflowPattern ? index : i) .. length].dup);
 			}
 		}
 
