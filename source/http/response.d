@@ -59,7 +59,7 @@ public:
 		this.version_     = version_;
 	}
 
-	override void clear()
+	override nothrow void clear()
 	{
 		super.clear();
 		statusCode = HttpStatus.none;

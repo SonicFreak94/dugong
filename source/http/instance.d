@@ -22,9 +22,9 @@ import http.response;
 interface IHttpInstance
 {
 	/// Returns the connected state of this instance.
-	@property bool connected();
+	@safe @property bool connected() const;
 	/// Disconnects this instance.
-	void disconnect();
+	nothrow void disconnect();
 	/// Main parsing routine.
 	void run();
 	/// Main receiving function.
@@ -35,7 +35,7 @@ interface IHttpInstance
 	/// Sends the data in this instance to its connected socket.
 	void send();
 	/// Clears the data in this instance.
-	void clear();
+	nothrow void clear();
 }
 
 /// Base class for $(D HttpRequest) and $(D HttpResponse).
@@ -65,13 +65,13 @@ public:
 		this.socket.setTimeouts(keepAlive, timeout);
 	}
 
-	void disconnect()
+	nothrow void disconnect()
 	{
 		socket.disconnect();
 		socket = null;
 	}
 
-	void clear()
+	nothrow void clear()
 	{
 		overflow.clear();
 
@@ -156,16 +156,19 @@ public:
 	}
 
 final:
-	/// Indicates whether or not this instance uses connection persistence.
-	@property bool isPersistent() { return persistent; }
-	/// Indicates whether or not this instance expects to have a body.
-	@property bool hasBody() { return chunked || hasBody_; }
-	/// Indicates whether or not the Transfer-Encoding header is present in this instance.
-	@property bool isChunked() { return chunked; }
-	/// Indicates whether or not ths instance is connected.
-	@property bool connected() { return socket !is null && socket.isAlive; }
+	@safe @property
+	{
+		/// Indicates whether or not this instance uses connection persistence.
+		nothrow bool isPersistent() const { return persistent; }
+		/// Indicates whether or not this instance expects to have a body.
+		nothrow bool hasBody() const { return chunked || hasBody_; }
+		/// Indicates whether or not the Transfer-Encoding header is present in this instance.
+		nothrow bool isChunked() const { return chunked; }
+		/// Indicates whether or not ths instance is connected.
+		bool connected() const { return socket !is null && socket.isAlive; }
+	}
 
-	string getHeader(in string key, string* realKey = null)
+	nothrow string getHeader(in string key, string* realKey = null)
 	{
 		import std.uni : sicmp;
 

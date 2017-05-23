@@ -32,14 +32,14 @@ public:
 		super(socket);
 	}
 
-	override void clear()
+	override nothrow void clear()
 	{
 		super.clear();
 		method     = HttpMethod.none;
 		requestUrl = null;
 	}
 
-	override void disconnect()
+	override nothrow void disconnect()
 	{
 		super.disconnect();
 		closeRemote();
@@ -257,17 +257,9 @@ private:
 			}
 			catch (Exception ex)
 			{
-				try
-				{
-					clear();
-					socket.sendNotFound();
-					closeRemote();
-				}
-				catch (Exception)
-				{
-					// ignored
-				}
-
+				clear();
+				socket.sendNotFound();
+				closeRemote();
 				return;
 			}
 
@@ -363,7 +355,7 @@ private:
 		}
 	}
 
-	void closeRemote()
+	nothrow void closeRemote()
 	{
 		if (response !is null)
 		{
@@ -377,10 +369,12 @@ private:
 			remote = null;
 		}
 	}
+
 	bool checkRemote()
 	{
 		return remote !is null && remote.isAlive && remote.peek(_fwd_peek) != 0;
 	}
+
 	bool connectRemote()
 	{
 		if (checkRemote())
@@ -412,26 +406,7 @@ private:
 
 		try
 		{
-			try
-			{
-				remote = new HttpSocket(address, port);
-			}
-			catch (Exception ex)
-			{
-				try
-				{
-					clear();
-					socket.sendNotFound();
-					closeRemote();
-				}
-				catch (Exception)
-				{
-					// ignored
-				}
-
-				return false;
-			}
-
+			remote = new HttpSocket(address, port);
 			return true;
 		}
 		catch (Exception)

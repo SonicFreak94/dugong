@@ -40,7 +40,7 @@ private ubyte[HTTP_BUFFLEN] _buffer;
 	Params:
 		socket = The socket to disconnect.
 */
-void disconnect(Socket socket)
+nothrow void disconnect(Socket socket)
 {
 	if (socket !is null)
 	{
