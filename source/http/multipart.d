@@ -6,6 +6,8 @@ import std.string;
 
 import http.common;
 
+// TODO: probably just merge with HttpInstance
+
 /// Handles multipart POST data from clients.
 class HttpMultiPart
 {

@@ -168,7 +168,7 @@ final:
 		bool connected() const { return socket !is null && socket.isAlive; }
 	}
 
-	nothrow string getHeader(in string key, string* realKey = null)
+	@nogc nothrow string getHeader(in string key, string* realKey = null)
 	{
 		import std.uni : sicmp;
 
@@ -287,26 +287,27 @@ final:
 		return headers.byKeyValue.map!(x => x.key ~ ": " ~ x.value).join("\r\n");
 	}
 
+	private void byChunkMethod()
+	{
+		// readChunk yields the buffer whenever possible
+		if (!socket.readChunk(overflow, body_))
+		{
+			disconnect();
+		}
+	}
+
 	/// Read data from this instance by chunk (Transfer-Encoding).
 	auto byChunk()
 	{
-		enforce(isChunked, "byChunk() called on instance with no chunked data.");
-
-		return new Generator!(ubyte[])(
-		{
-			// readChunk yields the buffer whenever possible
-			if (!socket.readChunk(overflow, body_))
-			{
-				disconnect();
-			}
-		});
+		enforce(isChunked, __PRETTY_FUNCTION__ ~ " called on instance with no chunked data.");
+		return new Generator!(ubyte[])(&byChunkMethod);
 	}
 
 	/// Read data from this instance by block (requires Content-Length).
 	auto byBlock()
 	{
 		immutable header = getHeader("Content-Length");
-		enforce(!header.empty, "byBlock() called on instance with no Content-Length header.");
+		enforce(!header.empty, __PRETTY_FUNCTION__ ~ " called on instance with no Content-Length header.");
 
 		const length = to!size_t(header);
 		return socket.byBlock(overflow, length);

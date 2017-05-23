@@ -19,22 +19,25 @@ public:
 		buffer.clear();
 	}
 
-	@property auto target()
+	@safe @property
 	{
-		return _target;
+		nothrow auto target() const
+		{
+			return _target;
+		}
+
+		nothrow auto length() const
+		{
+			return buffer.data.length;
+		}
+
+		nothrow bool reachedTarget() const
+		{
+			return length == target;
+		}
 	}
 
-	@property auto length()
-	{
-		return buffer.data.length;
-	}
-
-	@property bool reachedTarget()
-	{
-		return length == target;
-	}
-
-	void put(T value, ref Appender!(T[]) overflow)
+	@safe nothrow void put(T value, ref Appender!(T[]) overflow)
 	{
 		if (length < target)
 		{
@@ -51,7 +54,7 @@ public:
 		}
 	}
 
-	bool match(in T[] data)
+	@safe @nogc nothrow bool match(in T[] data)
 	{
 		return reachedTarget && buffer.data == data;
 	}
