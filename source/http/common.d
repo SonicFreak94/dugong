@@ -15,12 +15,12 @@ import std.string;
 
 import window;
 
-// TODO: make all socket methods part of a derived socket type to reduce allocations
+// TODO: make all socket methods part of a derived socket type to reduce allocations (i.e generators; "using closure causes GC allocation")
 // TODO: use a range (or even array) instead of appender for overflow buffers
 // TODO: consider uninitializedArray for local buffers
 
 /// Yields and then sleeps the current thread.
-void wait()
+nothrow void wait()
 {
 	yield();
 	Thread.sleep(1.msecs);
@@ -40,7 +40,7 @@ private ubyte[HTTP_BUFFLEN] _buffer;
 	Params:
 		socket = The socket to disconnect.
 */
-nothrow void disconnect(Socket socket)
+@safe nothrow void disconnect(Socket socket)
 {
 	if (socket !is null)
 	{
@@ -57,7 +57,7 @@ nothrow void disconnect(Socket socket)
 		keepAlive = Keep-alive time.
 		timeout   = The send/receive timeout.
 */
-void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
+@safe void setTimeouts(Socket socket, int keepAlive, in Duration timeout)
 {
 	if (socket !is null)
 	{
@@ -166,7 +166,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 ///		str = An $(D Appender!(char[])) to scan until $(D pattern).
 /// 	pattern = Pattern to scan for.
 /// Returns: The data if found, else null.
-char[] get(ref Appender!(char[]) str, const char[] pattern)
+@safe char[] get(ref Appender!(char[]) str, const char[] pattern)
 {
 	if (str.data.empty)
 	{
@@ -195,7 +195,7 @@ char[] get(ref Appender!(char[]) str, const char[] pattern)
 	Returns:
 		The block of data if found, else `null`.
 */
-char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
+@safe char[] overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
 	auto result = input.get(pattern);
@@ -650,7 +650,7 @@ ptrdiff_t readChunk(Socket socket, ref Appender!(char[]) overflow, out ubyte[] o
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-ptrdiff_t peek(Socket socket, void[] buffer)
+@safe ptrdiff_t peek(Socket socket, void[] buffer)
 {
 	auto result = socket.receive(buffer, SocketFlags.PEEK);
 
@@ -674,7 +674,7 @@ ptrdiff_t peek(Socket socket, void[] buffer)
 		output = The appender to write the line to.
 		args = Arguments to add to the line.`
 */
-void writeln(T, A...)(ref Appender!T output, A args)
+@safe void writeln(T, A...)(ref Appender!T output, A args)
 {
 	foreach (a; args)
 	{
