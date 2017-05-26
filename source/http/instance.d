@@ -15,7 +15,6 @@ import std.uni : sicmp;
 
 import http.common;
 import http.enums;
-import http.multipart;
 import http.response;
 
 /// Interface for HTTP instances.
@@ -45,6 +44,8 @@ private:
 	bool persistent;
 	bool hasBody_;
 	bool chunked;
+	bool isMultiPart_;
+	string multiPartBoundary_;
 
 protected:
 	Socket socket;
@@ -108,7 +109,11 @@ public:
 			return;
 		}
 
-		void sendBody()
+		if (isMultiPart)
+		{
+			sendMultiPart(s);
+		}
+		else
 		{
 			if (!hasBody)
 			{
@@ -123,31 +128,51 @@ public:
 				}
 			}
 		}
+	}
 
-		auto contentType = getHeader("Content-Type").idup;
-		if (!contentType.toLower().canFind("multipart"))
+	final void sendMultiPart(Socket s)
+	{
+		immutable start = "--" ~ multiPartBoundary;
+		immutable end = start ~ "--";
+
+		while (true)
 		{
-			sendBody();
-			return;
+			char[] _boundary;
+
+			if (socket.readln(overflow, _boundary) < 1)
+			{
+				break;
+			}
+
+			enforce(_boundary.startsWith(start), "Malformed multipart line: boundary not found");
+			s.writeln(_boundary);
+
+			if (_boundary == end)
+			{
+				break;
+			}
+
+			string[string] _headers;
+
+			foreach (line; socket.byLine(overflow))
+			{
+				s.writeln(line);
+
+				if (line.empty)
+				{
+					break;
+				}
+
+				auto key = line.munch("^:").idup;
+				line.munch(": ");
+				_headers[key] = line.idup;
+			}
+
+			foreach (ubyte[] buffer; socket.byBlockUntil(start, overflow, true))
+			{
+				s.sendYield(buffer);
+			}
 		}
-
-		contentType.munch(" ");
-		contentType.munch("^ ");
-		contentType.munch(" ");
-
-		immutable boundaryParam = contentType.munch("^=");
-		contentType.munch(" =");
-
-		if (boundaryParam.sicmp("boundary") != 0)
-		{
-			sendBody();
-			return;
-		}
-
-		immutable boundary = contentType.munch("^ ;");
-
-		auto multipart = new HttpMultiPart(socket, boundary);
-		multipart.send(s, overflow);
 	}
 
 	void send()
@@ -164,6 +189,10 @@ final:
 		nothrow bool hasBody() const { return chunked || hasBody_; }
 		/// Indicates whether or not the Transfer-Encoding header is present in this instance.
 		nothrow bool isChunked() const { return chunked; }
+		/// Indicates whether or not this instance contains multi-part data.
+		nothrow bool isMultiPart() const { return isMultiPart_; }
+		/// Gets the multi-part boundary for this instance.
+		nothrow auto multiPartBoundary() const { return multiPartBoundary_; }
 		/// Indicates whether or not ths instance is connected.
 		bool connected() const { return socket !is null && socket.isAlive; }
 	}
@@ -253,6 +282,25 @@ final:
 		if (connection.empty)
 		{
 			connection = getHeader("Proxy-Connection");
+		}
+
+		// Duplicating because we will be modifying this string.
+		auto contentType = getHeader("Content-Type").idup;
+
+		if (!contentType.empty && contentType.toLower().canFind("multipart"))
+		{
+			contentType.munch(" ");
+			contentType.munch("^ ");
+			contentType.munch(" ");
+
+			immutable boundaryParam = contentType.munch("^=");
+			contentType.munch(" =");
+
+			if (!boundaryParam.sicmp("boundary"))
+			{
+				multiPartBoundary_ = contentType.munch("^ ;");
+				isMultiPart_ = true;
+			}
 		}
 
 		switch (version_) with (HttpVersion)
