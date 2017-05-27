@@ -68,13 +68,20 @@ public:
 
 	nothrow void disconnect()
 	{
-		socket.disconnect();
+		if (socket !is null)
+		{
+			socket.disconnect();
+		}
+
 		socket = null;
 	}
 
 	nothrow void clear()
 	{
-		socket.clear();
+		if (socket !is null)
+		{
+			socket.clear();
+		}
 
 		persistent = false;
 		version_   = HttpVersion.v1_1;
