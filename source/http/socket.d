@@ -18,7 +18,7 @@ import window;
 ///		str = An $(D Appender!(char[])) to scan until $(D pattern).
 /// 	pattern = Pattern to scan for.
 /// Returns: The data if found, else null.
-@safe static char[] get(ref Appender!(char[]) str, const char[] pattern)
+@safe private char[] get(ref Appender!(char[]) str, const char[] pattern)
 {
 	if (str.data.empty)
 	{
@@ -47,7 +47,7 @@ import window;
 	Returns:
 		The block of data if found, else `null`.
 */
-@safe static char[] _overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
+@safe private char[] _overflow(ref Appender!(char[]) input, const char[] pattern, ref Appender!(char[]) output)
 {
 	enforce(input !is output, "input and output must be different!");
 	auto result = input.get(pattern);
@@ -79,7 +79,7 @@ import window;
 class HttpSocket : Socket
 {
 private:
-	/// (thread-local) static buffer for receiving data.
+	// TODO: dynamically sizing, perhaps deterministically allocated
 	private ubyte[HTTP_BUFFLEN] _buffer;
 	Appender!(char[]) overflow;
 
@@ -120,6 +120,22 @@ public:
 		this.setTimeouts(keepAlive, timeout);
 	}
 
+	~this()
+	{
+		disconnect();
+	}
+
+	@safe nothrow void disconnect()
+	{
+		http.common.disconnect(super);
+		clear();
+	}
+
+	@safe nothrow void clear()
+	{
+		overflow.clear();
+	}
+
 	override protected pure nothrow @safe HttpSocket accepting()
 	{
 		return new HttpSocket();
@@ -128,11 +144,6 @@ public:
 	override @trusted HttpSocket accept()
 	{
 		return cast(HttpSocket)super.accept();
-	}
-
-	nothrow void clear()
-	{
-		overflow.clear();
 	}
 
 	/**
