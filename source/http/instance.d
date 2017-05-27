@@ -16,6 +16,7 @@ import std.uni : sicmp;
 import http.common;
 import http.enums;
 import http.response;
+import http.socket;
 
 /// Interface for HTTP instances.
 interface IHttpInstance
@@ -30,7 +31,7 @@ interface IHttpInstance
 	/// Returns: $(D true) if data has been received.
 	bool receive();
 	/// Sends the data stored in this instance to the given socket.
-	void send(Socket s);
+	void send(HttpSocket s);
 	/// Sends the data in this instance to its connected socket.
 	void send();
 	/// Clears the data in this instance.
@@ -48,14 +49,13 @@ private:
 	string multiPartBoundary_;
 
 protected:
-	Socket socket;
-	Appender!(char[]) overflow;
+	HttpSocket socket;
 	HttpVersion version_;
 	string[string] headers;
 	ubyte[] body_;
 
 public:
-	this(Socket socket, bool hasBody = true, int keepAlive = 5, lazy Duration timeout = 15.seconds)
+	this(HttpSocket socket, bool hasBody = true, int keepAlive = 5, lazy Duration timeout = 15.seconds)
 	{
 		enforce(socket !is null, "socket must not be null!");
 		enforce(socket.isAlive, "socket must be connected!");
@@ -74,7 +74,7 @@ public:
 
 	nothrow void clear()
 	{
-		overflow.clear();
+		socket.clear();
 
 		persistent = false;
 		version_   = HttpVersion.v1_1;
@@ -83,7 +83,7 @@ public:
 		chunked    = false;
 	}
 
-	void send(Socket s)
+	void send(HttpSocket s)
 	{
 		// This toString() is implemented by the derived class.
 		s.sendYield(toString());
@@ -130,7 +130,7 @@ public:
 		}
 	}
 
-	final void sendMultiPart(Socket s)
+	final void sendMultiPart(HttpSocket s)
 	{
 		immutable start = "--" ~ multiPartBoundary;
 		immutable end = start ~ "--";
@@ -139,7 +139,7 @@ public:
 		{
 			char[] _boundary;
 
-			if (socket.readln(overflow, _boundary) < 1)
+			if (socket.readln(_boundary) < 1)
 			{
 				break;
 			}
@@ -154,7 +154,7 @@ public:
 
 			string[string] _headers;
 
-			foreach (line; socket.byLine(overflow))
+			foreach (line; socket.byLine())
 			{
 				s.writeln(line);
 
@@ -168,7 +168,7 @@ public:
 				_headers[key] = line.idup;
 			}
 
-			foreach (ubyte[] buffer; socket.byBlockUntil(start, overflow, true))
+			foreach (ubyte[] buffer; socket.byBlockUntil(start, true))
 			{
 				s.sendYield(buffer);
 			}
@@ -228,7 +228,7 @@ final:
 	/// $(D headers), performs error handling, maybe more idk.
 	void parseHeaders()
 	{
-		foreach (char[] header; socket.byLine(overflow))
+		foreach (char[] header; socket.byLine())
 		{
 			if (header.empty)
 			{
@@ -338,7 +338,7 @@ final:
 	private void byChunkMethod()
 	{
 		// readChunk yields the buffer whenever possible
-		if (!socket.readChunk(overflow, body_))
+		if (!socket.readChunk(body_))
 		{
 			disconnect();
 		}
@@ -358,6 +358,6 @@ final:
 		enforce(!header.empty, __PRETTY_FUNCTION__ ~ " called on instance with no Content-Length header.");
 
 		const length = to!size_t(header);
-		return socket.byBlock(overflow, length);
+		return socket.byBlock(length);
 	}
 }

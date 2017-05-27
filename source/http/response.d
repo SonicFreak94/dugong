@@ -13,10 +13,11 @@ import std.uni : sicmp;
 import http.common;
 import http.enums;
 import http.instance;
+import http.socket;
 
 /// Convenience function which constructs $(D HttpResponse) with
 /// the given status code and immediately sends it.
-nothrow void sendResponse(Socket socket, int statusCode, string statusPhrase = null)
+nothrow void sendResponse(HttpSocket socket, int statusCode, string statusPhrase = null)
 {
 	try
 	{
@@ -30,13 +31,13 @@ nothrow void sendResponse(Socket socket, int statusCode, string statusPhrase = n
 }
 
 /// Shorthand for sendResponse
-nothrow void sendBadRequest(Socket socket)
+nothrow void sendBadRequest(HttpSocket socket)
 {
 	socket.sendResponse(HttpStatus.badRequest);
 }
 
 /// Shorthand for sendResponse
-nothrow void sendNotFound(Socket socket)
+nothrow void sendNotFound(HttpSocket socket)
 {
 	socket.sendResponse(HttpStatus.notFound);
 }
@@ -49,7 +50,7 @@ private:
 	string statusPhrase;
 
 public:
-	this(Socket socket, bool hasBody,
+	this(HttpSocket socket, bool hasBody,
 		 int statusCode = HttpStatus.ok, string statusPhrase = null, HttpVersion version_ = HttpVersion.v1_1)
 	{
 		super(socket, hasBody);
@@ -95,7 +96,7 @@ public:
 		clear();
 
 		char[] line;
-		if (socket.readln(overflow, line) < 1 && line.empty)
+		if (socket.readln(line) < 1 && line.empty)
 		{
 			disconnect();
 			return false;

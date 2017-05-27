@@ -41,8 +41,8 @@ int main(string[] argv)
 
 	stdout.writeln("Started. Opening socket...");
 	auto listeners = [
-		new Socket(AddressFamily.INET, SocketType.STREAM),
-		//new Socket(AddressFamily.INET6, SocketType.STREAM)
+		new HttpSocket(AddressFamily.INET, SocketType.STREAM),
+		//new HttpSocket(AddressFamily.INET6, SocketType.STREAM)
 	];
 
 	listeners.each!(x => x.blocking = false);

@@ -15,7 +15,7 @@ import http;
 class HttpRequest : HttpInstance
 {
 private:
-	Socket remote;
+	HttpSocket remote;
 	HttpResponse response;
 	bool established;
 	HttpMethod method;
@@ -27,7 +27,7 @@ private:
 public:
 	/// Constructs an instance of $(D HttpRequest) using
 	/// the specified connected socket.
-	this(Socket socket)
+	this(HttpSocket socket)
 	{
 		super(socket);
 	}
@@ -145,7 +145,7 @@ public:
 	{
 		char[] line;
 
-		if (socket.readln(overflow, line) < 1 && line.empty)
+		if (socket.readln(line) < 1 && line.empty)
 		{
 			disconnect();
 			return false;
@@ -270,7 +270,7 @@ private:
 		connectProxy();
 	}
 
-	auto forward(Socket from, Socket to)
+	auto forward(HttpSocket from, HttpSocket to)
 	{
 		if (from is null || !from.isAlive)
 		{
