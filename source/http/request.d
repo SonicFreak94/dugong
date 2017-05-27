@@ -21,6 +21,7 @@ private:
 	HttpMethod method;
 	string requestUrl;
 
+	// TODO: not this
 	ubyte[] _fwd_buffer;
 	ubyte[1] _fwd_peek;
 

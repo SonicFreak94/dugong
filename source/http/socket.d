@@ -11,6 +11,7 @@ import std.exception;
 import std.string;
 
 import http.common;
+import buffer;
 import window;
 
 /// Pulls a whole line out of an $(D Appender!(char[])) and leaves any remaining data.
@@ -79,8 +80,9 @@ import window;
 class HttpSocket : Socket
 {
 private:
-	// TODO: dynamically sizing, perhaps deterministically allocated
-	private ubyte[HTTP_BUFFLEN] _buffer;
+	alias BufferT = Buffer!(ubyte, 256 * 1024);
+
+	BufferT _buffer;
 	Appender!(char[]) overflow;
 
 public:
@@ -125,15 +127,21 @@ public:
 		disconnect();
 	}
 
-	@safe nothrow void disconnect()
+	nothrow void disconnect()
 	{
 		http.common.disconnect(super);
 		clear();
 	}
 
-	@safe nothrow void clear()
+	nothrow void clear()
 	{
 		overflow.clear();
+
+		if (_buffer !is null)
+		{
+			_buffer.clear();
+			_buffer = null;
+		}
 	}
 
 	override protected pure nothrow @safe HttpSocket accepting()
@@ -158,6 +166,14 @@ public:
 		super.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, timeout);
 		super.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
 		super.setKeepAlive(keepAlive, keepAlive);
+	}
+
+	private void initBuffer()
+	{
+		if (_buffer is null)
+		{
+			_buffer = new BufferT();
+		}
 	}
 
 	ptrdiff_t readBlockUntil(const char[] pattern, bool overflowPattern = false)
@@ -238,11 +254,12 @@ public:
 			return 0;
 		}
 
+		initBuffer();
 		enforce(!blocking, "socket must be non-blocking");
 
 		while (!window.match(pattern) && isAlive)
 		{
-			auto length = this.receiveYield(_buffer);
+			auto length = this.receiveYield(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{
@@ -250,6 +267,8 @@ public:
 				result = -1;
 				break;
 			}
+
+			_buffer.addLength(length);
 
 			_wbuffer.clear();
 
@@ -360,11 +379,12 @@ public:
 			return 0;
 		}
 
+		initBuffer();
 		enforce(!blocking, "socket must be non-blocking");
 
 		while (index < 0 && isAlive)
 		{
-			length = this.receiveYield(_buffer);
+			length = this.receiveYield(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{
@@ -372,6 +392,8 @@ public:
 				overflow.clear();
 				break;
 			}
+
+			_buffer.addLength(length);
 
 			index = (cast(char[])_buffer[0 .. length]).indexOf(pattern);
 
@@ -480,15 +502,19 @@ public:
 			overflow.clear();
 		}
 
+		initBuffer();
+
 		while (result < target)
 		{
-			auto length = this.receiveYield(_buffer);
+			auto length = this.receiveYield(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{
 				overflow.clear();
 				return length;
 			}
+
+			_buffer.addLength(length);
 
 			auto remainder = target - result;
 			arr = _buffer[0 .. min(length, remainder)];
