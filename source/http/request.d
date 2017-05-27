@@ -10,6 +10,7 @@ import std.exception;
 import std.string;
 
 import http;
+import buffer;
 
 /// A request received from a client or for sending to a server.
 class HttpRequest : HttpInstance
@@ -21,8 +22,8 @@ private:
 	HttpMethod method;
 	string requestUrl;
 
-	// TODO: not this
-	ubyte[] _fwd_buffer;
+	alias BufferT = Buffer!(ubyte, 256 * 1024);
+	BufferT _fwd_buffer;
 	ubyte[1] _fwd_peek;
 
 public:
@@ -36,7 +37,14 @@ public:
 	override nothrow void clear()
 	{
 		super.clear();
-		method     = HttpMethod.none;
+
+		if (_fwd_buffer !is null)
+		{
+			_fwd_buffer.clear();
+			_fwd_buffer = null;
+		}
+
+		method = HttpMethod.none;
 		requestUrl = null;
 	}
 
@@ -247,7 +255,7 @@ private:
 		{
 			if (_fwd_buffer is null)
 			{
-				_fwd_buffer = new ubyte[HTTP_BUFFLEN];
+				_fwd_buffer = new BufferT();
 			}
 
 			try
@@ -285,17 +293,18 @@ private:
 
 		ptrdiff_t result, length;
 
-		length = from.receiveYield(_fwd_buffer);
+		length = from.receiveYield(_fwd_buffer[]);
 		result = length;
 
 		if (length > 0)
 		{
 			to.sendYield(_fwd_buffer[0 .. length]);
+			_fwd_buffer.addLength(length);
 		}
 
 		while (length == _fwd_buffer.length)
 		{
-			length = from.receiveYield(_fwd_buffer);
+			length = from.receiveYield(_fwd_buffer[]);
 
 			if (length < 1)
 			{
@@ -305,6 +314,8 @@ private:
 			if (length > 0)
 			{
 				to.sendYield(_fwd_buffer[0 .. length]);
+				_fwd_buffer.addLength(length);
+
 				result += length;
 			}
 		}

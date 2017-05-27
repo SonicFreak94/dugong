@@ -68,6 +68,8 @@ public:
 
 	nothrow void disconnect()
 	{
+		clear();
+
 		if (socket !is null)
 		{
 			socket.disconnect();
