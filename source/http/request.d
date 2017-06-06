@@ -279,7 +279,7 @@ private:
 		connectProxy();
 	}
 
-	auto forward(HttpSocket from, HttpSocket to)
+	auto forward(scope HttpSocket from, scope HttpSocket to)
 	{
 		if (from is null || !from.isAlive)
 		{

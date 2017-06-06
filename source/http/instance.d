@@ -31,7 +31,7 @@ interface IHttpInstance
 	/// Returns: $(D true) if data has been received.
 	bool receive();
 	/// Sends the data stored in this instance to the given socket.
-	void send(HttpSocket s);
+	void send(scope HttpSocket s);
 	/// Sends the data in this instance to its connected socket.
 	void send();
 	/// Clears the data in this instance.
@@ -92,7 +92,7 @@ public:
 		chunked    = false;
 	}
 
-	void send(HttpSocket s)
+	void send(scope HttpSocket s)
 	{
 		// This toString() is implemented by the derived class.
 		s.sendYield(toString());
@@ -139,7 +139,7 @@ public:
 		}
 	}
 
-	final void sendMultiPart(HttpSocket s)
+	final void sendMultiPart(scope HttpSocket s)
 	{
 		immutable start = "--" ~ multiPartBoundary;
 		immutable end = start ~ "--";

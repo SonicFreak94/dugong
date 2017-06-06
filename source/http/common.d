@@ -31,7 +31,7 @@ nothrow void wait()
 	Params:
 		socket = The socket to disconnect.
 */
-@safe nothrow void disconnect(Socket socket)
+@safe nothrow void disconnect(scope Socket socket)
 {
 	if (socket !is null)
 	{
@@ -54,7 +54,7 @@ nothrow void wait()
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-ptrdiff_t receiveYield(Socket socket, void[] buffer)
+ptrdiff_t receiveYield(scope Socket socket, scope void[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -99,7 +99,7 @@ ptrdiff_t receiveYield(Socket socket, void[] buffer)
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
+ptrdiff_t sendYield(scope Socket socket, scope const(void)[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -146,7 +146,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-@safe ptrdiff_t peek(Socket socket, void[] buffer)
+@safe ptrdiff_t peek(scope Socket socket, scope void[] buffer)
 {
 	auto result = socket.receive(buffer, SocketFlags.PEEK);
 
@@ -170,7 +170,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 		output = The appender to write the line to.
 		args = Arguments to add to the line.`
 */
-@safe void writeln(T, A...)(ref Appender!T output, A args)
+@safe void writeln(T, A...)(scope ref Appender!T output, A args)
 {
 	foreach (a; args)
 	{
@@ -187,7 +187,7 @@ ptrdiff_t sendYield(Socket socket, const(void)[] buffer)
 		socket = The socket to write the line to.
 		args = Arguments to add to the line.
 */
-auto writeln(A...)(Socket socket, A args)
+auto writeln(A...)(scope Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);
