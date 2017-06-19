@@ -213,7 +213,7 @@ void connectAsync(scope Socket socket, scope Address address)
 }
 
 /**
-	Convenience function for writing lines to a `Socket``
+	Convenience function for writing lines to a `Socket`
 
 	Params:
 		socket = The socket to write the line to.

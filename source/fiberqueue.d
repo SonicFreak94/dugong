@@ -30,9 +30,9 @@ public:
 	/// allowed in this instance.
 	this(size_t capacity = 1000)
 	{
-		this.capacity_ = capacity;
-		fibers        = new FiberScheduler();
-		mtx_requests  = new Mutex();
+		capacity_    = capacity;
+		fibers       = new FiberScheduler();
+		mtx_requests = new Mutex();
 	}
 
 	/// The maximum number of concurrent connections allowed
