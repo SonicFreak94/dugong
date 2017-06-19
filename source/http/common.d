@@ -14,9 +14,6 @@ const enum HTTP_BREAK = "\r\n";
 /// Receive buffer size (1MiB)
 const enum HTTP_BUFFLEN = 1 * 1024 * 1024;
 
-// TODO: use a range (or even array) instead of appender for overflow buffers
-// TODO: consider uninitializedArray for local buffers
-
 /// Yields and then sleeps the current thread.
 nothrow void wait()
 {
@@ -39,7 +36,6 @@ nothrow void wait()
 		socket.close();
 	}
 }
-
 
 /**
 	Pseudo-blocking version of `Socket.receive` for non-blocking
@@ -133,6 +129,30 @@ ptrdiff_t sendAsync(scope Socket socket, scope const(void)[] buffer)
 	} while (socket.isAlive && result < buffer.length && sent < 1 && MonoTime.currTime - start < timeout);
 
 	return result;
+}
+
+/**
+	Pseudo-blocking version of `Socket.connect` for non-blocking
+	sockets which calls `yield` until the connection has been established
+	or an error has occurred.
+
+	Params:
+		socket = The socket to connect on.
+		address = The address to connect to.
+*/
+void connectAsync(scope Socket socket, scope Address address)
+{
+	while (true)
+	{
+		socket.connect(address);
+
+		if (!wouldHaveBlocked())
+		{
+			break;
+		}
+
+		yield();
+	}
 }
 
 /**
