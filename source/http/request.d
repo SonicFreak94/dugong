@@ -293,18 +293,18 @@ private:
 
 		ptrdiff_t result, length;
 
-		length = from.receiveYield(_fwd_buffer[]);
+		length = from.receiveAsync(_fwd_buffer[]);
 		result = length;
 
 		if (length > 0)
 		{
-			to.sendYield(_fwd_buffer[0 .. length]);
+			to.sendAsync(_fwd_buffer[0 .. length]);
 			_fwd_buffer.addLength(length);
 		}
 
 		while (length == _fwd_buffer.length)
 		{
-			length = from.receiveYield(_fwd_buffer[]);
+			length = from.receiveAsync(_fwd_buffer[]);
 
 			if (length < 1)
 			{
@@ -313,7 +313,7 @@ private:
 
 			if (length > 0)
 			{
-				to.sendYield(_fwd_buffer[0 .. length]);
+				to.sendAsync(_fwd_buffer[0 .. length]);
 				_fwd_buffer.addLength(length);
 
 				result += length;

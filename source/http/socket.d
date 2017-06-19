@@ -259,7 +259,7 @@ public:
 
 		while (!window.match(pattern) && isAlive)
 		{
-			auto length = this.receiveYield(_buffer[]);
+			auto length = this.receiveAsync(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{
@@ -384,7 +384,7 @@ public:
 
 		while (index < 0 && isAlive)
 		{
-			length = this.receiveYield(_buffer[]);
+			length = this.receiveAsync(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{
@@ -506,7 +506,7 @@ public:
 
 		while (result < target)
 		{
-			auto length = this.receiveYield(_buffer[]);
+			auto length = this.receiveAsync(_buffer[]);
 
 			if (!length || length == HttpSocket.ERROR)
 			{

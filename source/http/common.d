@@ -54,7 +54,7 @@ nothrow void wait()
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-ptrdiff_t receiveYield(scope Socket socket, scope void[] buffer)
+ptrdiff_t receiveAsync(scope Socket socket, scope void[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -99,7 +99,7 @@ ptrdiff_t receiveYield(scope Socket socket, scope void[] buffer)
 		The number of bytes read, `0` if the connection has been closed,
 		or `Socket.ERROR` on failure.
 */
-ptrdiff_t sendYield(scope Socket socket, scope const(void)[] buffer)
+ptrdiff_t sendAsync(scope Socket socket, scope const(void)[] buffer)
 {
 	if (socket is null || !socket.isAlive)
 	{
@@ -191,5 +191,5 @@ auto writeln(A...)(scope Socket socket, A args)
 {
 	Appender!string builder;
 	builder.writeln(args);
-	return socket.sendYield(builder.data);
+	return socket.sendAsync(builder.data);
 }

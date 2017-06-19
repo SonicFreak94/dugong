@@ -95,11 +95,11 @@ public:
 	void send(scope HttpSocket s)
 	{
 		// This toString() is implemented by the derived class.
-		s.sendYield(toString());
+		s.sendAsync(toString());
 
 		if (!body_.empty)
 		{
-			s.sendYield(body_);
+			s.sendAsync(body_);
 			return;
 		}
 
@@ -109,7 +109,7 @@ public:
 		{
 			foreach (chunk; byChunk())
 			{
-				if (s.sendYield(chunk) < 1)
+				if (s.sendAsync(chunk) < 1)
 				{
 					break;
 				}
@@ -131,7 +131,7 @@ public:
 
 			foreach (block; byBlock())
 			{
-				if (s.sendYield(block) < 1)
+				if (s.sendAsync(block) < 1)
 				{
 					break;
 				}
@@ -179,7 +179,7 @@ public:
 
 			foreach (ubyte[] buffer; socket.byBlockUntil(start, true))
 			{
-				s.sendYield(buffer);
+				s.sendAsync(buffer);
 			}
 		}
 	}
