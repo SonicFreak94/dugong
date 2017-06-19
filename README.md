@@ -1,5 +1,5 @@
 # dugong
 
-Dugong is an HTTP(S) cache server written in D designed to be simple to use for simple caching. It's an alternative to Squid with a much cooler associated animal--the Dugong.
+Dugong is an HTTP(S) proxy server written in D which is designed to be simple to use. The goal is to implement caching much like Squid, but with a much cooler associated animal--the Dugong.
 
 ![](http://i.imgur.com/NF9ADAe.png)
