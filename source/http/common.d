@@ -142,17 +142,29 @@ ptrdiff_t sendAsync(scope Socket socket, scope const(void)[] buffer)
 */
 void connectAsync(scope Socket socket, scope Address address)
 {
-	while (true)
-	{
-		socket.connect(address);
+	enforce(socket !is null);
+	enforce(!socket.blocking);
 
-		if (!wouldHaveBlocked())
+	Duration timeout;
+	socket.getOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
+	enforce(timeout >= 1.msecs, "SocketOption.RCVTIMEO must be at least 1ms");
+
+	const start = MonoTime.currTime;
+
+	auto set = new SocketSet();
+	socket.connect(address);
+
+	do
+	{
+		set.add(socket);
+
+		if (Socket.select(null, set, null, 1.msecs) > 0)
 		{
 			break;
 		}
 
 		yield();
-	}
+	} while (socket.isAlive && MonoTime.currTime - start < timeout);
 }
 
 /**

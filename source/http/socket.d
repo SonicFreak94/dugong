@@ -77,6 +77,7 @@ import window;
 	return result;
 }
 
+/// `Socket` wrapper with deterministically allocated, dynamically expanding buffer.
 class HttpSocket : Socket
 {
 private:
@@ -103,10 +104,11 @@ public:
 	this(InternetAddress addr, int keepAlive = 5, lazy Duration timeout = 15.seconds)
 	{
 		super(addr.addressFamily, SocketType.STREAM, ProtocolType.TCP);
-		super.connect(addr);
-		super.blocking = false;
 
 		this.setTimeouts(keepAlive, timeout);
+
+		super.blocking = false;
+		super.connectAsync(addr);
 	}
 
 	this(in string address, ushort port, int keepAlive = 5, lazy Duration timeout = 15.seconds)
