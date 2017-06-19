@@ -167,6 +167,31 @@ void connectAsync(scope Socket socket, scope Address address)
 	} while (socket.isAlive && MonoTime.currTime - start < timeout);
 }
 
+Address[] getAddressAsync(in char[] hostname, in char[] service = null)
+{
+	Address[] result;
+	
+	auto t = new Thread({
+		result = getAddress(hostname, service);
+	});
+
+	t.start();
+
+	while (t.isRunning)
+	{
+		yield();
+	}
+
+	t.join(true);
+	return result;
+}
+
+Address[] getAddressAsync(in char[] hostname, ushort port)
+{
+	import std.conv : to;
+	return getAddressAsync(hostname, to!string(port));
+}
+
 /**
 	Peek at incoming data on the specified `Socket`.
 

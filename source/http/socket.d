@@ -101,7 +101,7 @@ public:
 		this.setTimeouts(keepAlive, timeout);
 	}
 
-	this(InternetAddress addr, int keepAlive = 5, lazy Duration timeout = 15.seconds)
+	this(Address addr, int keepAlive = 5, lazy Duration timeout = 15.seconds)
 	{
 		super(addr.addressFamily, SocketType.STREAM, ProtocolType.TCP);
 
@@ -113,8 +113,9 @@ public:
 
 	this(in string address, ushort port, int keepAlive = 5, lazy Duration timeout = 15.seconds)
 	{
-		auto addr = new InternetAddress(address, port);
-		this(addr, keepAlive, timeout);
+		auto addresses = getAddressAsync(address, port);
+		enforce(!addresses.empty);
+		this(addresses[0], keepAlive, timeout);
 	}
 
 	this(AddressFamily af, SocketType type, int keepAlive = 5, lazy Duration timeout = 15.seconds)
