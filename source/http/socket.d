@@ -115,7 +115,26 @@ public:
 	{
 		auto addresses = getAddressAsync(address, port);
 		enforce(!addresses.empty);
-		this(addresses[0], keepAlive, timeout);
+
+		// HACK: prefers ipv4
+		// TODO: configurable, maybe specifiable as constructor arg
+		Address _address;
+
+		foreach (a; addresses)
+		{
+			if (a.addressFamily == AddressFamily.INET)
+			{
+				_address = a;
+				break;
+			}
+		}
+
+		if (_address is null)
+		{
+			_address = addresses[0];
+		}
+
+		this(_address, keepAlive, timeout);
 	}
 
 	this(AddressFamily af, SocketType type, int keepAlive = 5, lazy Duration timeout = 15.seconds)

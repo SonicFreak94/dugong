@@ -95,7 +95,7 @@ public:
 
 				case connect:
 					handleConnect();
-					break;
+					continue;
 
 				case options:
 				case get:
@@ -274,6 +274,7 @@ private:
 
 			auto response = new HttpResponse(socket, false);
 			response.send();
+			established = true;
 		}
 
 		connectProxy();
