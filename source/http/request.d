@@ -95,6 +95,7 @@ public:
 
 				case connect:
 					handleConnect();
+					// HACK: Fix for Connection: close
 					continue;
 
 				case options:
