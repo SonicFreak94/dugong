@@ -6,12 +6,15 @@ import core.time;
 
 import std.algorithm;
 import std.array;
+import std.ascii : isWhite;
 import std.concurrency;
 import std.conv;
 import std.exception;
+import std.functional : not;
 import std.range;
 import std.string;
 import std.uni : sicmp;
+import std.utf : byCodeUnit;
 
 import http.common;
 import http.enums;
@@ -172,9 +175,15 @@ public:
 					break;
 				}
 
+				/*
 				auto key = line.munch("^:").idup;
 				line.munch(": ");
 				_headers[key] = line.idup;
+				*/
+
+				auto split_ = line.findSplit(":");
+				auto key = split_[0].idup;
+				_headers[key] = stripLeft(split_[2]).idup;
 			}
 
 			foreach (ubyte[] buffer; socket.byBlockUntil(start, true))
@@ -244,8 +253,18 @@ final:
 				break;
 			}
 
-			auto key = header.munch("^:").idup;
-			header.munch(": ");
+			//auto key = header.munch("^:").idup;
+			
+			auto key = to!string(header.byCodeUnit.until(':'));
+
+			//header.munch(": ");
+
+			header = header
+			         .byCodeUnit
+			         .find(':')
+			         .dropOne
+			         .find!(x => !isWhite(x) && x != ':')
+			         .source;
 
 			// If more than one Content-Length header is
 			// specified, take the smaller of the two.
@@ -294,20 +313,47 @@ final:
 		}
 
 		// Duplicating because we will be modifying this string.
-		auto contentType = getHeader("Content-Type").idup;
+		char[] contentType = getHeader("Content-Type").dup;
 
 		if (!contentType.empty && contentType.toLower().canFind("multipart"))
 		{
+
+			import std.ascii : isWhite;
+			alias notWhite = (x) => !isWhite(x);
+
+			/*
 			contentType.munch(" ");
 			contentType.munch("^ ");
 			contentType.munch(" ");
+			*/
 
+			contentType = contentType
+			              .byCodeUnit
+			              .find!(not!isWhite)
+			              .find!(isWhite)
+			              .find!(not!isWhite)
+			              .source;
+
+			/*
 			immutable boundaryParam = contentType.munch("^=");
 			contentType.munch(" =");
+			*/
+
+			const boundaryParam = contentType.byCodeUnit.until('=').array;
+
+			contentType = contentType
+			              .byCodeUnit
+			              .find('=')
+			              .dropOne
+			              .find!(x => !isWhite(x) || x == '=')
+			              .source;
 
 			if (!boundaryParam.sicmp("boundary"))
 			{
-				multiPartBoundary_ = contentType.munch("^ ;");
+				//multiPartBoundary_ = contentType.munch("^ ;");
+				// can I do this without a copy?
+				contentType = contentType.byCodeUnit.until!(x => isWhite(x) || x == ';').array;
+				multiPartBoundary_ = to!string(contentType);
 				isMultiPart_ = true;
 			}
 		}

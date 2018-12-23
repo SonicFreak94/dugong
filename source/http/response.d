@@ -4,11 +4,13 @@ import core.time;
 
 import std.algorithm;
 import std.array;
+import std.ascii : isWhite;
 import std.conv;
 import std.exception;
 import std.range;
 import std.string;
 import std.uni : sicmp;
+import std.utf : byCodeUnit;
 
 import http.common;
 import http.enums;
@@ -107,12 +109,18 @@ public:
 			return false;
 		}
 
-		auto _httpVersion = line.munch("^ ");
+		auto _httpVersion = to!string(line.byCodeUnit.until!isWhite);
 		version_ = _httpVersion.toVersion();
-		line.munch(" ");
+
+		line = line
+		       .byCodeUnit
+		       .find!isWhite
+		       .source
+		       .stripLeft;
 
 		statusCode = parse!int(line);
-		line.munch(" ");
+
+		line = line.stripLeft;
 
 		statusPhrase = line.idup;
 
