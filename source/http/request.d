@@ -261,6 +261,7 @@ private:
 
 			try
 			{
+				// TODO: IPv6 support (generic address parser?)
 				auto address = requestUrl.split(':');
 				remote = new HttpSocket(address[0], to!ushort(address[1]));
 				enforce(remote.isAlive, "Failed to connect to remote server: " ~ requestUrl);
