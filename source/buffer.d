@@ -114,17 +114,10 @@ public:
 			return;
 		}
 
-		auto s = sum(_avg_p[]) / WindowSize;
+		const s = sum(_avg_p[]) / WindowSize;
 
 		if (s >= newLength && s >= length)
 		{
-			synchronized debug
-			{
-				import std.stdio : stderr;
-				auto _len = length;
-				stderr.writefln("EXPANDING: %d -> %d", _len, _len * 2);
-			}
-
 			length = length * 2;
 		}
 
